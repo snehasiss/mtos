@@ -59,11 +59,26 @@ convenience, not a substitute for this model.
 
 ## Cluster profiles
 
+An accessory node is the local controller and power assembly: one ESP32 linked
+to the SBC's MQTT broker over Wi-Fi; one or more PCA9685 boards on short I2C;
+a protected 12 V bus connection; a local 12 V-to-5 V converter; separated
+logic, servo, and driven-output distribution; and the connectors, decoupling,
+identification, and service provisions for its assigned loads. An accessory
+cluster is the geographical collection of turnouts, signals, sensors, lighting,
+and other devices served by that node.
+
 - A standard cluster contains one ESP32 and one PCA9685 and is planned for up
   to five turnout servos and five signals.
 - A yard cluster contains one ESP32 and two daisy-chained PCA9685 boards and is
   planned for up to ten turnout servos and ten signals.
 - A PECO SL-90 double slip consumes two separately calibrated servo channels.
+
+Servos are powered from the node's local 5 V rail, but PWM is normally disabled
+after movement; firmware serializes or limits simultaneous movements. Native
+12 V motorized/sound accessories and substantial scenery lighting use separate
+fused and switched branches, even when they share the main accessory supply.
+The detailed load allowances and the separate Axon/Cubietruck computer-power
+domain are specified in ADR-005.
 
 Each node configuration records its stable node ID, firmware and configuration
 revision, PCA9685 I2C addresses, accessory-to-channel mappings, and health data.

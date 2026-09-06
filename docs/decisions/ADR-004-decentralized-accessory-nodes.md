@@ -19,6 +19,26 @@ an ESP32 and one or more PCA9685 PWM boards connected by a short, local I2C
 bus. The SBC communicates with nodes over MQTT; it does not generate remote
 servo PWM directly.
 
+In MTOS, an **accessory node** is the complete local control and power unit,
+not only the ESP32. It consists of:
+
+- one ESP32 controller connected to the SBC's MQTT broker over Wi-Fi;
+- one or more PCA9685 boards on a short local I2C bus;
+- a fused connection to the layout's 12 V accessory-power bus;
+- a local 12 V-to-5 V DC-DC converter;
+- separate 5 V distribution for servos and suitable ESP32 board power;
+- 3.3 V-compatible PCA9685 logic and I2C wiring;
+- current-limited signal outputs and any required transistor/MOSFET drivers;
+- connectors for its assigned servos, signals, feedback sensors, and other
+  supported local accessories; and
+- enclosure or mounting, wiring identification, protection, decoupling, and
+  service access appropriate to its location.
+
+An **accessory cluster** is the geographical group of turnouts, signals, and
+other accessories served by one accessory node. The terms are related but not
+interchangeable: the node is the controller/power assembly; the cluster is the
+node plus the physical loads allocated to it.
+
 Two initial cluster profiles are accepted:
 
 | Profile | Hardware | Nominal capacity |
