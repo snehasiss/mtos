@@ -1,6 +1,6 @@
 # ADR-006: MQTT for accessory messaging
 
-- Status: Accepted, message contract pending
+- Status: Superseded by ADR-007
 - Date: 2026-09-06
 - Origin: Consolidates the accepted layout-automation ADR-003
 

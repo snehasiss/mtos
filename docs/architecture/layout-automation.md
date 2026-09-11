@@ -4,6 +4,9 @@ This document preserves the concrete system design from the four original
 layout-automation ADRs while separating accepted architecture from prototype
 code and unresolved contracts.
 
+> **Canonical decision:** ADR-007 supersedes the earlier accessory ADRs. Where
+> this historical architecture guide differs from ADR-007, ADR-007 governs.
+
 ## Physical and software topology
 
 ```mermaid
@@ -67,10 +70,10 @@ identification, and service provisions for its assigned loads. An accessory
 cluster is the geographical collection of turnouts, signals, sensors, lighting,
 and other devices served by that node.
 
-- A standard cluster contains one ESP32 and one PCA9685 and is planned for up
-  to five turnout servos and five signals.
-- A yard cluster contains one ESP32 and two daisy-chained PCA9685 boards and is
-  planned for up to ten turnout servos and ten signals.
+- The initial layout uses four ESP32 nodes and five PCA9685 boards. One node has
+  two addressed, daisy-chained boards.
+- Twenty turnout outputs plus 48 individual signal-aspect outputs consume 68
+  of the available 80 PWM channels and leave 12 spare.
 - A PECO SL-90 double slip consumes two separately calibrated servo channels.
 
 Servos are powered from the node's local 5 V rail, but PWM is normally disabled
@@ -91,7 +94,7 @@ it is not assumed for every prototype or signalling practice.
 
 ## Turnout actuation
 
-PECO SL-95, SL-96, and SL-90 mechanisms use an SG90 or MG90S servo, with the
+PECO SL-95, SL-96, and SL-90 mechanisms use an SG90 servo, with the
 over-centre spring removed and 0.8–1.0 mm spring-steel piano wire forming a
 compliant linkage. Firmware sweeps slowly between calibrated endpoints, then
 sets the PCA9685 channel fully off. The original prototype values were pulse

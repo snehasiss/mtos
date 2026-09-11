@@ -1,6 +1,6 @@
 # ADR-005: Accessory power distribution
 
-- Status: Accepted, pending electrical validation
+- Status: Superseded by ADR-007
 - Date: 2026-09-06
 - Origin: Consolidates the accepted layout-automation ADR-002
 

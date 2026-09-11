@@ -1,6 +1,6 @@
 # ADR-004: Decentralized accessory-control nodes
 
-- Status: Accepted
+- Status: Superseded by ADR-007
 - Date: 2026-09-06
 - Origin: Consolidates the accepted layout-automation ADR-001
 
