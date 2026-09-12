@@ -1,6 +1,6 @@
 # ADR-003: Domain data categories
 
-- **Status:** Proposed
+- **Status:** Superseded by ADR-008
 - **Date:** 2026-09-06
 
 ## Context
@@ -72,4 +72,3 @@ durable workflow as described in ADR-002.
 - Deployment and eligibility projection consumed by control adapters
 - Ownership and lifecycle of asset relationships such as pilot, booster,
   consist, and permanent coupling
-

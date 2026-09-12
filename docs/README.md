@@ -12,6 +12,7 @@ from proposals still under discussion.
 - [ADR-005: Accessory power distribution](decisions/ADR-005-accessory-power-distribution.md)
 - [ADR-006: MQTT for accessory messaging](decisions/ADR-006-mqtt-accessory-messaging.md)
 - [ADR-007: Stationary assets, control network, and power management](decisions/ADR-007-stationary-assets-control-network-and-power.md)
+- [ADR-008: Normalized asset-management and roster domain](decisions/ADR-008-asset-inventory-model.md)
 
 ## Working architecture
 
