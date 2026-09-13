@@ -24,6 +24,7 @@ from .assets.model import (
     Lifecycle,
     Model,
     Possession,
+    PREFIXES,
     Prototype,
     Relation,
     Status,
@@ -140,8 +141,9 @@ def validate(payload):
     if life.pop("asset_id", identity.value) != identity.value:
         raise ValueError("lifecycle asset_id does not match asset")
     life["possession"] = Possession(life.get("possession", "planned"))
-    life["status"] = Status(life["status"]) if life.get("status") else None
-    for key in ("ordered_on", "shipped_on", "received_on", "retired_on"):
+    life["status"] = Status(life.get("status", "unavailable"))
+    life["location"] = life.get("location") or "off_track"
+    for key in ("purchased_on",):
         if life.get(key):
             life[key] = date.fromisoformat(life[key])
     if life.get("updated_at"):
@@ -176,8 +178,52 @@ class Roster:
                 ).read_text()
                 db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
                 version = 2
-            if version != 2:
+            if version == 2:
+                safety = self.database.parent / "before-lifecycle-v3.sqlite3"
+                if not safety.exists():
+                    with sqlite3.connect(safety) as backup:
+                        db.backup(backup)
+                sql = (
+                    Path(__file__).parent / "migrations/003-simple-lifecycle.sql"
+                ).read_text()
+                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+                version = 3
+            if version != 3:
                 raise ValueError(f"Unsupported database schema: {version}")
+            self._migrate_media_layout(db)
+
+    def _migrate_media_layout(self, db):
+        """Move legacy media/<asset_id>/ files into media/<family>/ safely."""
+        for row in db.execute(
+            "SELECT m.asset_id,a.family,m.filename,m.sha256 FROM media m "
+            "JOIN asset a ON a.id=m.asset_id"
+        ):
+            legacy = self.media / row["asset_id"] / row["filename"]
+            canonical = self.media / row["family"] / row["filename"]
+            if not legacy.exists():
+                continue
+            if canonical.exists():
+                if hashlib.sha256(canonical.read_bytes()).hexdigest() != row["sha256"]:
+                    raise Conflict(f"Conflicting media migration target: {canonical}")
+                if hashlib.sha256(legacy.read_bytes()).hexdigest() != row["sha256"]:
+                    raise Conflict(f"Damaged legacy media file: {legacy}")
+                legacy.unlink()
+            else:
+                canonical.parent.mkdir(parents=True, exist_ok=True)
+                legacy.rename(canonical)
+            try:
+                legacy.parent.rmdir()
+            except OSError:
+                pass
+
+    def media_path(self, asset_id, filename, db=None):
+        if db is None:
+            with self.connect() as connection:
+                return self.media_path(asset_id, filename, connection)
+        row = db.execute("SELECT family FROM asset WHERE id=?", (asset_id,)).fetchone()
+        if row is None:
+            raise KeyError(asset_id)
+        return self.media / row["family"] / filename
 
     @contextmanager
     def lock(self):
@@ -247,7 +293,7 @@ class Roster:
             "images": [
                 dict(r)
                 for r in db.execute(
-                    "SELECT sequence,filename,view,caption,width,height FROM media "
+                    "SELECT sequence,filename,width,height FROM media "
                     "WHERE asset_id=? ORDER BY sequence",
                     (asset_id,),
                 )
@@ -299,6 +345,10 @@ class Roster:
                 if payload.get("id", asset_id) != asset_id:
                     raise ValueError("Asset ID is immutable")
                 merged = merge(old, payload)
+                if merged.get("family") != old["family"] and old["media"]["images"]:
+                    raise ValueError(
+                        "Asset family cannot change while media is attached"
+                    )
                 revision = old["revision"] + 1
             else:
                 merged = payload
@@ -394,16 +444,13 @@ class Roster:
                 )
             life = item["lifecycle"]
             db.execute(
-                "INSERT INTO lifecycle VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO lifecycle VALUES(?,?,?,?,?,?,?,?)",
                 (
                     aid,
                     life["possession"],
                     life.get("status"),
                     life.get("location"),
-                    life.get("ordered_on"),
-                    life.get("shipped_on"),
-                    life.get("received_on"),
-                    life.get("retired_on"),
+                    life.get("purchased_on"),
                     revision,
                     timestamp,
                     json.dumps(life.get("acquisition", {})),
@@ -486,19 +533,33 @@ class Roster:
             )
         return next(c for c in self.consists() if c["id"] == item.id.value)
 
-    def put_media(
-        self, asset_id, sequence, source, *, optimize=False, view=None, caption=None
-    ):
+    def next_asset_id(self, family):
+        family = AssetFamily(family)
+        prefix = PREFIXES[family]
+        with self.connect() as db:
+            used = {
+                int(row[0][1:])
+                for row in db.execute(
+                    "SELECT id FROM asset WHERE id GLOB ?",
+                    (prefix + "[0-9][0-9][0-9]",),
+                )
+            }
+        for number in range(1, 1000):
+            if number not in used:
+                return f"{prefix}{number:03d}"
+        raise Conflict(f"No asset IDs remain for prefix {prefix}")
+
+    def put_media(self, asset_id, sequence, source, *, optimize=False):
         from PIL import Image
 
-        from .assets.images import optimize_image
+        from .image_optimizer import optimize_image
 
         if type(sequence) is not int or sequence < 1:
             raise ValueError("Image sequence must be positive")
         with self.transaction() as db:
-            self._get(db, asset_id)
+            asset = self._get(db, asset_id)
             filename = f"{asset_id}_{sequence}.jpg"
-            dest = self.media / asset_id / filename
+            dest = self.media / asset["family"] / filename
             existing = db.execute(
                 "SELECT sha256 FROM media WHERE asset_id=? AND sequence=?",
                 (asset_id, sequence),
@@ -527,13 +588,11 @@ class Roster:
                 with Image.open(dest) as image:
                     width, height = image.size
                 db.execute(
-                    "INSERT INTO media VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO media VALUES(?,?,?,?,?,?,?,?)",
                     (
                         asset_id,
                         sequence,
                         filename,
-                        view,
-                        caption,
                         hashlib.sha256(dest.read_bytes()).hexdigest(),
                         width,
                         height,

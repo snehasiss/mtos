@@ -21,17 +21,18 @@ def test_lifecycle_vocabulary_and_locations():
         "received",
     ]
     assert [s.value for s in Status] == [
+        "unavailable",
         "stored",
         "active",
         "parked",
         "maintenance",
         "retired",
     ]
-    assert len(LOCATIONS) == 20
-    for location in LOCATIONS:
+    assert len(LOCATIONS) == 21
+    for location in set(LOCATIONS) - {"off_track"}:
         Lifecycle(AssetId("L001"), Possession.RECEIVED, Status.PARKED, location)
     with pytest.raises(ValueError, match="location"):
-        Lifecycle(AssetId("L001"), Possession.RECEIVED, Status.PARKED)
+        Lifecycle(AssetId("L001"), Possession.RECEIVED, Status.PARKED, "off_track")
     with pytest.raises(ValueError, match="location"):
         Lifecycle(AssetId("L001"), Possession.RECEIVED, Status.ACTIVE, "block25")
 
@@ -51,14 +52,23 @@ def test_schema_upgrade_preserves_old_values(tmp_path):
         db.execute(
             "INSERT INTO lifecycle(asset_id,possession,revision,updated_at) VALUES('L001','parked',1,'2026-01-01')"
         )
+        db.execute(
+            "UPDATE lifecycle SET ordered_on='2020-01-01',retired_on=NULL,"
+            "acquisition='{\"acquired\":\"2020-02-03\"}' WHERE asset_id='L001'"
+        )
     roster = Roster(root)
     life = roster.get("L001")["lifecycle"]
     assert life["possession"] == "sheltered"
+    assert life["status"] == "unavailable"
+    assert life["location"] == "off_track"
+    assert life["purchased_on"] == "2020-02-03"
+    assert life["acquisition"]["legacy_ordered_on"] == "2020-01-01"
+    assert (root / "db/before-lifecycle-v3.sqlite3").is_file()
     assert life["acquisition"]["legacy_possession"] == "parked"
     with roster.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-    assert Roster(root).get("L001")["revision"] == 2
+    assert Roster(root).get("L001")["revision"] == 3
 
 
 def test_manual_restore_preserves_previous_data_and_refuses_running_service(tmp_path):

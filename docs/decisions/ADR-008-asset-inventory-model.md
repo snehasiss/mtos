@@ -46,6 +46,12 @@ Every asset has:
 }
 ```
 
+The add interface allocates the first available ID for the selected family's
+prefix and displays it read-only before saving. Thus a machine proposes `E001`,
+not the locomotive default `L001`. Passenger and freight search the same C-number
+namespace. Allocation is advisory until the transactional insert; a concurrent
+collision is rejected and the form must request the next ID again.
+
 `family` is used instead of `class`, because class also means a prototype railway
 class and a software class. The former `desc` field is renamed `type`. Values use
 snake case. `label` is optional; rolling stock is normally identified and searched
@@ -56,7 +62,7 @@ by `prototype.reporting_mark` and `prototype.road_number`.
 | `loco` | `L` | `diesel`, `turbine`, `steam`, `booster` |
 | `mow` | `M` | `tamper`, `mpv`, `track_cleaner`, `crane`, `snowplow` |
 | `passenger` | `C` | `coach`, `balcony`, `heater_car`, `power_car`, `luggage`, `brakevan` |
-| `freight` | `C` | `wagon`, `tanker`, `gondola`, `intermodal`, `flat_car`, `reefer` |
+| `freight` | `C` | `wagon`, `tanker`, `gondola`, `intermodal`, `flat_car`, `reefer`, `caboose`, `tender` |
 | `node` | `N` | `control_node` |
 | `turnout` | `T` | `left`, `right`, `wye`, `crossing`, `double_slip` |
 | `signal` | `G` | `ground_2a`, `mainline_3a`, `branchline_2a` |
@@ -67,6 +73,10 @@ Passenger `power_car` includes what may otherwise be called a generator car.
 `intermodal` replaces the narrower `well_car`. There is no separate static versus
 operating water-tank type; installed components and control configuration say
 whether a particular `water_tank` is powered.
+
+The freight `tender` type is for a separately inventoried auxiliary tender. A
+tender permanently integral to one steam locomotive remains a component of that
+locomotive rather than a separate asset.
 
 The prefixes are intentionally not globally mnemonic: passenger and freight both
 use `C`. The full ID remains globally unique.
@@ -189,9 +199,7 @@ Lifecycle is separate from the asset master:
   "possession": "received",
   "status": "active",
   "location": "test_main_1",
-  "ordered_on": "2026-01-02",
-  "shipped_on": "2026-01-08",
-  "received_on": "2026-01-12",
+  "purchased_on": "2026-01-02",
   "revision": 4,
   "updated_at": "2026-09-13T10:00:00Z"
 }
@@ -209,10 +217,11 @@ has been removed. `parked` now belongs only to inventory status.
 Status values are:
 
 ```text
-stored | active | parked | maintenance | retired
+unavailable | stored | active | parked | maintenance | retired
 ```
 
-`stored` includes boxed, `active` includes installed, and `maintenance` includes
+`unavailable` is the explicit default before receipt. `stored` includes boxed,
+`active` includes installed, and `maintenance` includes
 repair and workshop work. `retired` is a status, not possession: a retired asset
 can still be physically owned. A future disposition such as sold or scrapped can
 be added separately if required.
@@ -221,20 +230,23 @@ be added separately if required.
 
 Rules:
 
-- Only `received` assets have an inventory status.
-- A received asset must have a status.
+- Assets not yet received have status `unavailable`.
 - Active and parked assets must have a valid layout location.
 - Every non-null location must belong to the following vocabulary:
 
 ```text
+off_track
 main_west_1, main_west_2, main_east_1, main_east_2
 main_north_1, main_north_2, main_south_1, main_south_2
 yard_west_1, yard_west_2, yard_west_3, yard_west_4
 yard_south_1, yard_south_2, yard_south_3, yard_south_4
 park_1, park_2, test_main_1, test_prog_1
 ```
-- A retired asset has `retired_on`; records and IDs are retained and IDs are never
-  reused.
+- `off_track` is the explicit default location; active and parked require another
+  enumerated layout location.
+- Lifecycle stores one optional `purchased_on` date. Other milestone dates are
+  not part of v1; migration retains prior values in acquisition metadata. Records
+  and IDs are retained on retirement and IDs are never reused.
 - `scope` and display status are not part of version 1.
 - `revision` supports optimistic concurrency for mobile edits.
 
@@ -280,19 +292,22 @@ appear in a consist.
 ### Media
 
 Media metadata references an asset; binary data is not embedded in asset JSON or
-SQLite. Files live below `data/media/<asset_id>/`. Stored filenames use the
-asset ID and input sequence beginning at one:
+SQLite. Files are grouped by asset family under `data/media/<family>/`. Stored
+filenames use the globally unique asset ID and input sequence beginning at one:
 
 ```text
-data/media/L001/L001_1.jpg
-data/media/L001/L001_2.jpg
+data/media/loco/L001_1.jpg
+data/media/loco/L001_2.jpg
 ```
 
 The composite `(asset_id, sequence)` identifies an image, so a separate global
 media ID is unnecessary. Deleted sequence numbers are not reused and existing
 files are not renumbered. For stationary assets without a reporting mark and road
 number, the asset ID is the filename stem, for example
-`data/media/G013/G013_1.jpg`.
+`data/media/signal/G013_1.jpg`. Family is resolved from the authoritative asset
+record, never inferred from a filename. This keeps manual media inspection useful
+without creating one directory per asset. Asset family cannot be changed while
+media is attached; this prevents database and filesystem placement from diverging.
 
 The JSON media collection provides one generated `base_url` and filenames. The
 base URL is not persisted because it depends on deployment:
@@ -302,8 +317,8 @@ base URL is not persisted because it depends on deployment:
   "asset_id": "L001",
   "base_url": "/api/assets/L001/media/",
   "images": [
-    { "filename": "L001_1.jpg", "view": "left_side" },
-    { "filename": "L001_2.jpg", "view": "right_side" }
+    { "filename": "L001_1.jpg" },
+    { "filename": "L001_2.jpg" }
   ]
 }
 ```
@@ -317,7 +332,7 @@ python3 tools/import_image.py --source ~/Pictures/train-photos/
 It resolves `REPORTINGMARKROADNUMBER_n.jpg` or `ASSETID_n.jpg` against the roster.
 Other assets use direct IDs, e.g. `G013_1.jpg`; type-only filenames cannot identify
 an individual asset. Unknown or ambiguous identities are reported without import.
-All output uses `ASSETID_n.jpg`. Existing destinations are skipped.
+All output uses `data/media/<family>/ASSETID_n.jpg`. Existing destinations are skipped.
 
 Defaults are `data/db/mtos.sqlite3` and `data/media` relative to the project root;
 `MTOS_DATA_DIR` or the utility's `--data-dir` overrides the root. The importer
@@ -325,9 +340,11 @@ queries `asset` and `prototype`, and registers each photo in the `media` table
 through the same transaction/locking boundary used by Flask and backups.
 
 Each new Pillow-supported source image has EXIF orientation applied, is converted
-to RGB JPEG, and is fitted within a 1280-by-720 bounding box using high-quality
-resampling. It is never stretched, cropped, or upscaled. JPEG output is progressive
-and optimized. Input sequence numbers are preserved.
+to RGB JPEG, center-cropped to 16:9, and resized within a 1280-by-720 maximum using
+high-quality resampling. It is never stretched or upscaled. This gives library
+cards, detail galleries, directory imports, and HTTP uploads one predictable
+aspect ratio. JPEG output is progressive and optimized. Input sequence numbers
+are preserved.
 
 Media is operational user data and is excluded from the MTOS source repository.
 Git history is not a backup mechanism for changing JPEG and SQLite data. The
@@ -362,8 +379,11 @@ including fields which have no direct equivalent. Acquisition source, price and
 legacy acquisition date are retained in lifecycle.acquisition.
 
 The UI supports add, search, edit, retirement through lifecycle status, ordered
-consist editing, photo upload and gallery display. Configuration editing records
-inventory information only; it does not program a decoder or actuate hardware.
+consist editing, photo upload and gallery display. The mobile asset form does not
+expose raw JSON for components, relations, or variable attributes; ordinary edits
+preserve those values. A future technical interface or CLI may manage them.
+Configuration editing records inventory information only; it does not program a
+decoder or actuate hardware.
 
 Asset management does not publish MQTT commands or model live railroad operation.
 Those concerns will receive separate decisions after the roster is complete.

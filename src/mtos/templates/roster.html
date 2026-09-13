@@ -3,13 +3,13 @@
 <meta name="csrf-token" content="{{ csrf }}"><title>MTOS · Asset Manager</title>
 <link rel="stylesheet" href="{{ url_for('static',filename='roster.css') }}">
 <script defer src="{{ url_for('static',filename='roster.js') }}"></script></head>
-<body><header><a href="/" class="brand">MTOS <span>Model Train Operating System</span></a></header>
+<body><header><a href="/" class="brand"><img class="brand-logo" src="{{ url_for('static',filename='mtos-logo-wireframe.png') }}" alt=""><span class="brand-copy"><b>MTOS</b><small>Model Train Operating System</small></span></a></header>
 <main><section id="library"><div class="title"><div><p class="eyebrow">YOUR COLLECTION</p><h1>Asset library</h1></div><button id="add">+ Add asset</button></div>
 <div class="filters"><label>Search<input id="search" type="search" placeholder="ID, reporting mark, road number…"></label>
 <label>Family<select id="filter-family"><option value="">All families</option></select></label>
 <label>Status<select id="filter-status"><option value="">All statuses</option></select></label></div>
 <p id="summary" aria-live="polite"></p><div id="cards" class="cards"></div>
-<nav class="pages"><button id="previous">Previous</button><button id="next">Next</button></nav>
+<nav class="pages" aria-label="Asset pages"><button id="previous" aria-label="Previous page">←</button><button id="next" aria-label="Next page">→</button></nav>
 <details><summary>Saved consists</summary><div id="consists"></div><form id="consist-form">
 <label>Consist ID<input name="id" placeholder="K001" pattern="K[0-9]{3}" required></label>
 <label>Label<input name="label"></label><label>Units, lead first<input name="units" placeholder="L001, L002" required></label>
@@ -26,23 +26,17 @@
 <fieldset><legend>Scale model</legend><div class="fields"><label>Scale<input name="scale" placeholder="ho"></label>
 <label>Maker<input name="model_maker"></label><label>Product number<input name="product_number"></label><label>Catalog name<input name="catalog_name"></label></div></fieldset>
 <fieldset><legend>Lifecycle</legend><div class="fields"><label>Possession<select name="possession"></select></label>
-<label>Status<select name="status"><option value="">Not yet received</option></select></label>
-<label>Location<select name="location"><option value="">Not on layout</option></select></label>
-<label>Ordered on<input name="ordered_on" type="date"></label><label>Shipped on<input name="shipped_on" type="date"></label>
-<label>Received on<input name="received_on" type="date"></label><label>Retired on<input name="retired_on" type="date"></label>
+<label>Status<select name="status"></select></label>
+<label>Location<select name="location"></select></label>
+<label>Purchased on<input name="purchased_on" type="date"></label>
 <label>Purchase source<input name="source"></label><label>Price<input name="price" type="number" min="0" step="0.01"></label></div></fieldset>
 <fieldset><legend>Control configuration</legend><div class="fields"><label class="check"><input type="checkbox" name="dcc"> DCC equipped</label>
 <label>DCC address<input name="address" type="number" min="1"></label><label>Decoder maker<input name="decoder_maker"></label>
 <label>Decoder model<input name="decoder_model"></label><label class="check"><input type="checkbox" name="sound"> Sound equipped</label>
 <label>Accessory node<input name="node_id" placeholder="N001" pattern="N[0-9]{3}"></label></div></fieldset>
 <label>Notes<textarea name="notes" rows="3"></textarea></label>
-<details><summary>Components, dependencies and additional attributes</summary>
-<p>Optional JSON configuration for integral parts, wiring and asset dependencies.</p>
-<label>Components<textarea name="components" rows="6" spellcheck="false">[]</textarea></label>
-<label>Relations<textarea name="relations" rows="4" spellcheck="false">[]</textarea></label>
-<label>Prototype attributes<textarea name="attributes" rows="4" spellcheck="false">{}</textarea></label></details>
 <div class="save"><button type="submit">Save asset</button><span id="save-status" role="status"></span></div></form>
 <section id="photos" hidden><h2>Photos</h2><div id="gallery" class="gallery"></div>
 <form id="image-form"><label>Choose photo<input name="image" type="file" accept="image/*" required></label>
-<label>View<input name="view" placeholder="left_side"></label><label>Caption<input name="caption"></label><button>Upload photo</button></form></section>
+<button>Upload photo</button></form></section>
 </section><p id="error" role="alert"></p></main><footer>MTOS · Asset management</footer></body></html>

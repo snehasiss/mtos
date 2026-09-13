@@ -29,7 +29,7 @@ def test_iphone_add_edit_search_and_retire(tmp_path):
             page.goto(f"http://127.0.0.1:{server.server_port}")
             expect(page.locator("#summary")).to_contain_text("0 assets")
             page.locator("#add").click()
-            page.locator("[name=id]").first.fill("L001")
+            expect(page.locator("[name=id]").first).to_have_value("L001")
             page.locator("[name=reporting_mark]").fill("SAL")
             page.locator("[name=road_number]").fill("4202")
             page.locator("[name=possession]").select_option("received")
@@ -47,7 +47,6 @@ def test_iphone_add_edit_search_and_retire(tmp_path):
                 "document.documentElement.scrollWidth > window.innerWidth"
             )
             page.locator("[name=status]").select_option("retired")
-            page.locator("[name=retired_on]").fill("2026-09-13")
             page.locator("#asset-form button[type=submit]").click()
             expect(page.locator("#save-status")).to_have_text("Saved")
             assert not errors

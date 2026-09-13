@@ -121,6 +121,10 @@ def create_app(config=None):
     def add():
         return jsonify(roster.save(request.get_json())), 201
 
+    @app.get("/api/next-asset-id")
+    def next_asset_id():
+        return jsonify(id=roster.next_asset_id(request.args.get("family", "")))
+
     @app.get("/api/assets/<asset_id>")
     def get(asset_id):
         return jsonify(roster.get(asset_id))
@@ -138,7 +142,9 @@ def create_app(config=None):
         images = roster.get(asset_id)["media"]["images"]
         if filename not in {image["filename"] for image in images}:
             abort(404)
-        return send_from_directory(roster.media / asset_id, filename)
+        return send_from_directory(
+            roster.media_path(asset_id, filename).parent, filename
+        )
 
     @app.post("/api/assets/<asset_id>/media")
     def upload(asset_id):
@@ -154,8 +160,6 @@ def create_app(config=None):
                 sequence,
                 source,
                 optimize=True,
-                view=request.form.get("view"),
-                caption=request.form.get("caption"),
             )
         if not created:
             raise Conflict("Image sequence already exists")

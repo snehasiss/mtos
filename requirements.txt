@@ -1,0 +1,7 @@
+# MTOS runtime dependencies; keep aligned with pyproject.toml.
+# Requires Python >= 3.11. A virtual environment is optional, not required.
+# Flask installs its supporting dependencies, including Werkzeug and Jinja2.
+# sqlite3 and json are Python standard-library modules, not pip packages.
+Pillow>=10
+Flask>=3.1,<4
+waitress>=3,<4

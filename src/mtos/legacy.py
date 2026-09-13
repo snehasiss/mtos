@@ -70,9 +70,11 @@ def convert(document):
     else:
         raise ValueError(f"Unmapped legacy status: {old_status}")
     life["acquisition"] = {k: model.get(k) for k in ("source", "price", "acquired")}
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(model.get("acquired") or "")):
+        life["purchased_on"] = model["acquired"]
     if old_status in ("missed", "parked", "bought"):
         life["acquisition"]["legacy_possession"] = old_status
-    # Legacy acquired does not establish receipt; retain the date without inventing received_on.
+    # Legacy acquired becomes the single purchase date when it is a complete ISO date.
     p = {
         "maker": proto.get("builder"),
         "model": proto.get("model"),

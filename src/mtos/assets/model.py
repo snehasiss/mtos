@@ -18,7 +18,7 @@ LOCATIONS = (
         for n in (1, 2)
     )
     + tuple(f"yard_{side}_{n}" for side in ("west", "south") for n in (1, 2, 3, 4))
-    + ("park_1", "park_2", "test_main_1", "test_prog_1")
+    + ("park_1", "park_2", "test_main_1", "test_prog_1", "off_track")
 )
 
 
@@ -53,7 +53,16 @@ TYPES: dict[AssetFamily, frozenset[str]] = {
         {"coach", "balcony", "heater_car", "power_car", "luggage", "brakevan"}
     ),
     AssetFamily.FREIGHT: frozenset(
-        {"wagon", "tanker", "gondola", "intermodal", "flat_car", "reefer"}
+        {
+            "wagon",
+            "tanker",
+            "gondola",
+            "intermodal",
+            "flat_car",
+            "reefer",
+            "caboose",
+            "tender",
+        }
     ),
     AssetFamily.NODE: frozenset({"control_node"}),
     AssetFamily.TURNOUT: frozenset({"left", "right", "wye", "crossing", "double_slip"}),
@@ -78,6 +87,7 @@ class Possession(StrEnum):
 
 
 class Status(StrEnum):
+    UNAVAILABLE = "unavailable"
     STORED = "stored"
     ACTIVE = "active"
     PARKED = "parked"
@@ -210,21 +220,15 @@ class Relation:
 
 @dataclass(frozen=True, slots=True)
 class Media:
-    id: int
-    type: str
-    view: str
-    file: str
-    thumb: str | None = None
+    sequence: int
+    filename: str
     primary: bool = False
-    notes: str | None = None
 
     def __post_init__(self) -> None:
-        if self.id < 1:
-            raise ValueError("media id must be positive")
-        _require_snake_case("media type", self.type)
-        _require_snake_case("media view", self.view)
-        if not self.file:
-            raise ValueError("media file is required")
+        if self.sequence < 1:
+            raise ValueError("media sequence must be positive")
+        if not self.filename:
+            raise ValueError("media filename is required")
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,30 +281,27 @@ class Asset:
 class Lifecycle:
     asset_id: AssetId
     possession: Possession = Possession.PLANNED
-    status: Status | None = None
-    location: str | None = None
-    ordered_on: date | None = None
-    shipped_on: date | None = None
-    received_on: date | None = None
-    retired_on: date | None = None
+    status: Status = Status.UNAVAILABLE
+    location: str = "off_track"
+    purchased_on: date | None = None
     revision: int = 1
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if self.revision < 1:
             raise ValueError("lifecycle revision must be positive")
-        if self.possession is Possession.RECEIVED and self.status is None:
-            raise ValueError("received asset requires a status")
-        if self.possession is not Possession.RECEIVED and self.status is not None:
-            raise ValueError("only a received asset can have an inventory status")
-        if self.location is not None and self.location not in LOCATIONS:
+        if (
+            self.possession is not Possession.RECEIVED
+            and self.status is not Status.UNAVAILABLE
+        ):
+            raise ValueError("assets not received must be unavailable")
+        if self.location not in LOCATIONS:
             raise ValueError("Unknown layout location")
-        if self.status in (Status.ACTIVE, Status.PARKED) and not self.location:
+        if (
+            self.status in (Status.ACTIVE, Status.PARKED)
+            and self.location == "off_track"
+        ):
             raise ValueError("active or parked asset requires a layout location")
-        if self.status is Status.RETIRED and self.retired_on is None:
-            raise ValueError("retired asset requires retired_on")
-        if self.retired_on is not None and self.status is not Status.RETIRED:
-            raise ValueError("retired_on requires retired status")
 
     def to_dict(self) -> dict[str, Any]:
         payload = _compact_json(asdict(self))

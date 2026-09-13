@@ -38,10 +38,14 @@ def verify(snapshot):
             or db.execute("PRAGMA foreign_key_check").fetchall()
         ):
             raise ValueError("Backup database integrity check failed")
-        for aid, filename, checksum in db.execute(
-            "SELECT asset_id,filename,sha256 FROM media"
+        for aid, family, filename, checksum in db.execute(
+            "SELECT m.asset_id,a.family,m.filename,m.sha256 FROM media m "
+            "JOIN asset a ON a.id=m.asset_id"
         ):
-            name = f"media/{aid}/{filename}"
+            name = f"media/{family}/{filename}"
+            legacy_name = f"media/{aid}/{filename}"
+            if name not in manifest["files"] and legacy_name in manifest["files"]:
+                name = legacy_name
             if manifest["files"].get(name) != checksum:
                 raise ValueError(f"Media does not match database: {name}")
     return manifest

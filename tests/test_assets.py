@@ -26,7 +26,7 @@ from mtos.assets import (
 def received(
     asset_id: str,
     status: Status = Status.STORED,
-    location: str | None = None,
+    location: str = "off_track",
     revision: int = 1,
 ) -> Lifecycle:
     return Lifecycle(
@@ -34,7 +34,7 @@ def received(
         Possession.RECEIVED,
         status,
         location,
-        received_on=date(2026, 1, 12),
+        purchased_on=date(2026, 1, 12),
         revision=revision,
     )
 
@@ -60,9 +60,11 @@ def test_updated_roster_vocabulary() -> None:
     Asset(AssetId("C003"), AssetFamily.PASSENGER, "brakevan")
     Asset(AssetId("C004"), AssetFamily.FREIGHT, "intermodal")
     Asset(AssetId("C005"), AssetFamily.FREIGHT, "reefer")
+    Asset(AssetId("C006"), AssetFamily.FREIGHT, "caboose")
+    Asset(AssetId("C007"), AssetFamily.FREIGHT, "tender")
     Asset(AssetId("E001"), AssetFamily.MACHINE, "water_tank")
     with pytest.raises(ValueError, match="unsupported"):
-        Asset(AssetId("C006"), AssetFamily.PASSENGER, "generator_car")
+        Asset(AssetId("C008"), AssetFamily.PASSENGER, "generator_car")
 
 
 def test_grouped_asset_payload_is_compact_and_searchable() -> None:
@@ -111,15 +113,17 @@ def test_lifecycle_is_a_separate_record_keyed_by_asset_id() -> None:
         Possession.SHELTERED,
     ],
 )
-def test_unreceived_asset_has_no_inventory_status(possession: Possession) -> None:
-    assert Lifecycle(AssetId("L001"), possession=possession).status is None
+def test_unreceived_asset_is_explicitly_unavailable_off_track(
+    possession: Possession,
+) -> None:
+    lifecycle = Lifecycle(AssetId("L001"), possession=possession)
+    assert lifecycle.status is Status.UNAVAILABLE
+    assert lifecycle.location == "off_track"
 
 
 def test_only_received_assets_can_have_status() -> None:
-    with pytest.raises(ValueError, match="only a received"):
+    with pytest.raises(ValueError, match="must be unavailable"):
         Lifecycle(AssetId("L001"), Possession.SHIPPED, Status.STORED)
-    with pytest.raises(ValueError, match="requires a status"):
-        Lifecycle(AssetId("L001"), Possession.RECEIVED)
 
 
 def test_active_rolling_stock_requires_layout_location() -> None:
@@ -131,7 +135,7 @@ def test_active_rolling_stock_requires_layout_location() -> None:
 def test_retirement_is_status_not_possession() -> None:
     asset = Asset(AssetId("C001"), AssetFamily.FREIGHT, "reefer")
     library = AssetLibrary([asset], [received("C001")])
-    retired = library.retire("C001", on=date(2026, 9, 13))
+    retired = library.retire("C001")
     assert retired.possession is Possession.RECEIVED
     assert retired.status is Status.RETIRED
     assert library.list() == ()
@@ -241,8 +245,6 @@ def test_consist_rejects_stationary_assets_and_duplicates() -> None:
 def test_media_can_be_added_and_primary_image_replaced() -> None:
     asset = Asset(AssetId("C001"), AssetFamily.FREIGHT, "gondola")
     library = AssetLibrary([asset])
-    library.add_media("C001", Media(1, "image", "side", "one.jpg", primary=True))
-    updated = library.add_media(
-        "C001", Media(2, "image", "front", "two.jpg", primary=True)
-    )
+    library.add_media("C001", Media(1, "C001_1.jpg", primary=True))
+    updated = library.add_media("C001", Media(2, "C001_2.jpg", primary=True))
     assert [item.primary for item in updated.media] == [False, True]

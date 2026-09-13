@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Iterable
 
 from .model import (
@@ -81,8 +81,8 @@ class AssetLibrary:
 
     def add_media(self, asset_id: AssetId | str, media: Media) -> Asset:
         asset = self.get(asset_id)
-        if any(existing.id == media.id for existing in asset.media):
-            raise ValueError(f"media already exists for {asset.id}: {media.id}")
+        if any(existing.sequence == media.sequence for existing in asset.media):
+            raise ValueError(f"media already exists for {asset.id}: {media.sequence}")
         items = tuple(
             replace(existing, primary=False) if media.primary else existing
             for existing in asset.media
@@ -107,13 +107,12 @@ class AssetLibrary:
         except KeyError as error:
             raise KeyError(f"lifecycle not found: {key}") from error
 
-    def retire(self, asset_id: AssetId | str, *, on: date) -> Lifecycle:
+    def retire(self, asset_id: AssetId | str) -> Lifecycle:
         previous = self.get_lifecycle(asset_id)
         return self.set_lifecycle(
             replace(
                 previous,
                 status=Status.RETIRED,
-                retired_on=on,
                 revision=previous.revision + 1,
                 updated_at=datetime.now(timezone.utc),
             )

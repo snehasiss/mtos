@@ -33,15 +33,15 @@ assets; manage lifecycle, consists, and photos. Layout operation will follow.
 ## Run the roster
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install -e '.[dev]'
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
 tools/asset_manager start
 ```
 
 Open `http://127.0.0.1:5301`. Use `tools/asset_manager restart`, `stop`, or `status` to
-manage the service. For a phone on a trusted LAN, start with `--host 0.0.0.0` and
-open the host's IP address on port 5301. This release has no account authentication.
+manage the service. It binds to `0.0.0.0` by default. For a phone on a trusted LAN,
+open the host's LAN IP address on port 5301. Use `--host 127.0.0.1` explicitly
+for local-only access. This release has no account authentication.
 
 The database lives in `data/db/`; photos live in `data/media/`. Both are excluded
 from Git. Backups are manually invoked to an existing mounted destination:
@@ -60,6 +60,11 @@ service is `asset_control` (port 5302); its launcher reserves the interface and
 reports that control functionality is not implemented yet.
 
 Current design material is under [`docs/`](docs/README.md).
+
+For development/tests, install `python3 -m pip install -e '.[dev]'` as well.
+Cubietruck deployment uses system Python 3.11 or newer, without `.venv`.
+A development virtual environment is optional. See the roster guide for
+deployment checks and OS-managed Python installation constraints.
 
 ## License and name
 

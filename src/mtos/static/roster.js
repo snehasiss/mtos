@@ -33,31 +33,30 @@ async function load(){
 async function edit(id){
  current=id?await api('/api/assets/'+id):null;form.reset();$('#error').textContent='';$('#save-status').textContent='';
  const a=current||{},p=a.prototype||{},m=a.model||{},l=a.lifecycle||{},c=a.control||{};
- field('family').value=a.family||'loco';types(a.type);field('id').disabled=!!id;
+ field('family').value=a.family||'loco';types(a.type);field('id').readOnly=true;
  const values={id:a.id,label:a.label,reporting_mark:p.reporting_mark,road_number:p.road_number,prototype_maker:p.maker,prototype_model:p.model,
  scale:m.scale,model_maker:m.maker,product_number:m.product_number,catalog_name:m.catalog_name,
- possession:l.possession||'planned',status:l.status,location:l.location,ordered_on:l.ordered_on,shipped_on:l.shipped_on,received_on:l.received_on,retired_on:l.retired_on,
+ possession:l.possession||'planned',status:l.status||'unavailable',location:l.location||'off_track',purchased_on:l.purchased_on,
  source:l.acquisition?.source,price:l.acquisition?.price,address:c.address,decoder_maker:c.decoder?.maker,decoder_model:c.decoder?.model,node_id:c.node_id,notes:a.notes};
  for(const [k,v] of Object.entries(values))field(k).value=v??'';
+ if(!id)field('id').value=(await api('/api/next-asset-id?family='+encodeURIComponent(field('family').value))).id;
  field('dcc').checked=c.dcc===true;field('sound').checked=c.sound===true;
- field('components').value=JSON.stringify(a.components||[],null,2);field('relations').value=JSON.stringify(a.relations||[],null,2);field('attributes').value=JSON.stringify(p.attributes||{},null,2);
  $('#editor-title').textContent=id?title(a):'Add asset';$('#library').hidden=true;$('#editor').hidden=false;$('#photos').hidden=!id;
  gallery();window.scrollTo(0,0);
 }
 function gallery(){
  $('#gallery').replaceChildren();if(!current)return;
  for(const photo of current.media.images){const a=document.createElement('a');a.href=current.media.base_url+photo.filename;a.target='_blank';a.rel='noopener';
- const img=document.createElement('img');img.src=a.href;img.alt=photo.caption||photo.filename;img.loading='lazy';a.append(img);$('#gallery').append(a);}
+ const img=document.createElement('img');img.src=a.href;img.alt=photo.filename;img.loading='lazy';a.append(img);$('#gallery').append(a);}
 }
 form.onsubmit=async e=>{e.preventDefault();$('#error').textContent='';const button=form.querySelector('button[type="submit"]');button.disabled=true;
  try{
  const payload={id:current?.id||val('id'),family:val('family'),type:val('type'),label:val('label'),notes:val('notes'),
- prototype:{...(current?.prototype||{}),reporting_mark:val('reporting_mark'),road_number:val('road_number'),maker:val('prototype_maker'),model:val('prototype_model'),attributes:JSON.parse(val('attributes')||'{}')},
+ prototype:{...(current?.prototype||{}),reporting_mark:val('reporting_mark'),road_number:val('road_number'),maker:val('prototype_maker'),model:val('prototype_model')},
  model:{...(current?.model||{}),scale:val('scale'),maker:val('model_maker'),product_number:val('product_number'),catalog_name:val('catalog_name')},
- lifecycle:{...(current?.lifecycle||{}),possession:val('possession'),status:val('status'),location:val('location'),
- ordered_on:val('ordered_on'),shipped_on:val('shipped_on'),received_on:val('received_on'),retired_on:val('retired_on'),
+ lifecycle:{...(current?.lifecycle||{}),possession:val('possession'),status:val('status'),location:val('location'),purchased_on:val('purchased_on'),
  acquisition:{...(current?.lifecycle?.acquisition||{}),source:val('source'),price:val('price')===null?null:Number(val('price'))}},
- components:JSON.parse(val('components')||'[]'),relations:JSON.parse(val('relations')||'[]')};
+ components:current?.components||[],relations:current?.relations||[]};
  payload.control=field('dcc').checked?{...(current?.control||{}),dcc:true,node_id:null,address:val('address')?Number(val('address')):null,
  decoder:{...(current?.control?.decoder||{}),maker:val('decoder_maker'),model:val('decoder_model')},sound:field('sound').checked}
  :{dcc:null,address:null,decoder:null,speed_steps:null,sound:null,node_id:val('node_id'),attributes:current?.control?.attributes||{}};
@@ -73,7 +72,8 @@ async function loadConsists(){const result=await api('/api/consists');$('#consis
 $('#consist-form').onsubmit=async e=>{e.preventDefault();try{const data=Object.fromEntries(new FormData(e.target));data.units=data.units.split(',').map(x=>x.trim()).filter(Boolean);const update=!!data.revision;if(update)data.revision=Number(data.revision);else delete data.revision;await api('/api/consists'+(update?'/'+data.id:''),{method:update?'PATCH':'POST',body:JSON.stringify(data)});e.target.reset();await loadConsists();}catch(e){error(e);}};
 $('#new-consist').onclick=()=>$('#consist-form').reset();
 $('#add').onclick=()=>edit().catch(error);$('#back').onclick=()=>{$('#editor').hidden=true;$('#library').hidden=false;$('#error').textContent='';load().catch(error);};
-field('family').onchange=()=>types();field('possession').onchange=()=>{field('status').value=val('possession')==='received'?'stored':'';};
+field('family').onchange=()=>{types();if(!current)api('/api/next-asset-id?family='+encodeURIComponent(field('family').value)).then(result=>field('id').value=result.id).catch(error);};
+field('possession').onchange=()=>{field('status').value=val('possession')==='received'?'stored':'unavailable';};
 $('#previous').onclick=()=>{offset=Math.max(0,offset-24);load().catch(error);};$('#next').onclick=()=>{offset+=24;load().catch(error);};
 let timer;for(const s of ['#search','#filter-family','#filter-status'])$(s).addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{offset=0;load().catch(error);},180);});
 (async()=>{schema=await api('/api/schema');for(const family of Object.keys(schema.families)){option(field('family'),family);option($('#filter-family'),family);}schema.possession.forEach(p=>option(field('possession'),p));schema.status.forEach(s=>{option(field('status'),s);option($('#filter-status'),s);});schema.locations.forEach(location=>option(field('location'),location));await load();await loadConsists();})().catch(error);

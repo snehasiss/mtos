@@ -24,7 +24,7 @@ def main():
         "--service", choices=["asset_manager", "asset_control"], default="asset_manager"
     )
     parser.add_argument("action", choices=["start", "stop", "restart", "status"])
-    parser.add_argument("--host")
+    parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
     args.port = {"asset_manager": 5301, "asset_control": 5302}[args.service]
     if args.service == "asset_control":
@@ -60,7 +60,6 @@ def main():
     with (run / f"{args.service}.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         info = running()
-        args.host = args.host or (info["host"] if info else "127.0.0.1")
         if args.action == "status":
             print(
                 f"Running PID {info['pid']} at {info['host']}:{info['port']}"
@@ -141,7 +140,7 @@ def main():
                 }
             )
         )
-        print(f"Started PID {process.pid}: http://{host}:{args.port}")
+        print(f"Started PID {process.pid}: listening on {args.host}:{args.port}")
 
 
 if __name__ == "__main__":

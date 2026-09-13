@@ -12,6 +12,8 @@ railroad meaning and an identified owner.
 | Product | A manufactured model-rail product or catalog definition; not necessarily an owned physical asset. |
 | Configuration | Mutable technical settings and installed components used to operate an asset. |
 | Lifecycle | Possession and inventory status stored separately from asset master data. |
+| Unavailable | Explicit inventory status for an asset not yet received. |
+| Off track | Explicit `off_track` location for an asset not placed on layout track. |
 | Consist | An ordered roster of rolling-stock asset IDs; not a permanent asset relationship. |
 | Operational state | Current commanded or observed state of the railroad. |
 | Transaction | A durable business or technical workflow with an outcome. |
