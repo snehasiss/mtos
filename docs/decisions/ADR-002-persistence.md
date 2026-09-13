@@ -1,6 +1,6 @@
 # ADR-002: Embedded transactional persistence
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-06
 
 ## Context
@@ -10,10 +10,15 @@ enforce references, uniqueness, coordinated updates, or concurrent access.
 MTOS needs atomic changes spanning asset lifecycle, control configuration, and
 transaction records while remaining suitable for a small SBC.
 
-## Proposed decision
+## Decision
 
 Use one embedded SQLite database as the authoritative live store for an MTOS
 installation.
+
+The roster database is `data/db/mtos.sqlite3`; photos are in `data/media`.
+Both are excluded from Git. `MTOS_DATA_DIR` configures another live data root.
+Manual `tools/mtos_backup --remote PATH --backup` snapshots the database and media together;
+there is no installed backup schedule. See `docs/operations/roster.md`.
 
 - Important identities, relationships, states, and query fields use relational
   columns with database constraints.
@@ -62,4 +67,3 @@ administration, or high write concurrency.
 
 Deferred because it adds an operational service without removing the need for
 explicit relationships, uniqueness, and transaction design.
-

@@ -7,8 +7,16 @@ from datetime import date, datetime, timezone
 from typing import Iterable
 
 from .model import (
-    Asset, AssetFamily, AssetId, Consist, ConsistId, Lifecycle, Media,
-    ROLLING_FAMILIES, Status, is_block,
+    Asset,
+    AssetFamily,
+    AssetId,
+    Consist,
+    ConsistId,
+    Lifecycle,
+    Media,
+    ROLLING_FAMILIES,
+    Status,
+    is_layout_location,
 )
 
 
@@ -133,9 +141,9 @@ class AssetLibrary:
         if (
             lifecycle.status is Status.ACTIVE
             and asset.family in ROLLING_FAMILIES
-            and not is_block(lifecycle.location)
+            and not is_layout_location(lifecycle.location)
         ):
-            raise ValueError("active rolling stock location must be a block such as block25")
+            raise ValueError("active rolling stock requires a valid layout location")
 
     @staticmethod
     def _validate_relations(assets: dict[AssetId, Asset]) -> None:
@@ -152,14 +160,18 @@ class AssetLibrary:
             lifecycle = lifecycles.get(asset.id)
             if lifecycle is None or lifecycle.status is not Status.ACTIVE:
                 continue
-            requirements = tuple(link for link in asset.relations if link.rel == "requires")
+            requirements = tuple(
+                link for link in asset.relations if link.rel == "requires"
+            )
             if asset.family is AssetFamily.LOCO and asset.type == "booster":
                 if not any(link.reason == "cab" for link in requirements):
                     raise ValueError("active booster requires a cab locomotive")
             for requirement in requirements:
                 target = lifecycles.get(requirement.asset_id)
                 if target is None or target.status is not Status.ACTIVE:
-                    raise ValueError(f"required asset is not active: {requirement.asset_id}")
+                    raise ValueError(
+                        f"required asset is not active: {requirement.asset_id}"
+                    )
                 if target.location != lifecycle.location:
                     raise ValueError(
                         f"required asset must be in {lifecycle.location}: {requirement.asset_id}"

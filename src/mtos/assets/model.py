@@ -11,7 +11,15 @@ from typing import Any
 _ASSET_ID = re.compile(r"^[A-Z][0-9]{3}$")
 _CONSIST_ID = re.compile(r"^K[0-9]{3}$")
 _SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
-_BLOCK = re.compile(r"^block[0-9]+$")
+LOCATIONS = (
+    tuple(
+        f"main_{side}_{n}"
+        for side in ("west", "east", "north", "south")
+        for n in (1, 2)
+    )
+    + tuple(f"yard_{side}_{n}" for side in ("west", "south") for n in (1, 2, 3, 4))
+    + ("park_1", "park_2", "test_main_1", "test_prog_1")
+)
 
 
 class AssetFamily(StrEnum):
@@ -27,9 +35,15 @@ class AssetFamily(StrEnum):
 
 
 PREFIXES: dict[AssetFamily, str] = {
-    AssetFamily.LOCO: "L", AssetFamily.MOW: "M", AssetFamily.PASSENGER: "C",
-    AssetFamily.FREIGHT: "C", AssetFamily.NODE: "N", AssetFamily.TURNOUT: "T",
-    AssetFamily.SIGNAL: "G", AssetFamily.MACHINE: "E", AssetFamily.BUILDING: "B",
+    AssetFamily.LOCO: "L",
+    AssetFamily.MOW: "M",
+    AssetFamily.PASSENGER: "C",
+    AssetFamily.FREIGHT: "C",
+    AssetFamily.NODE: "N",
+    AssetFamily.TURNOUT: "T",
+    AssetFamily.SIGNAL: "G",
+    AssetFamily.MACHINE: "E",
+    AssetFamily.BUILDING: "B",
 }
 
 TYPES: dict[AssetFamily, frozenset[str]] = {
@@ -59,14 +73,14 @@ class Possession(StrEnum):
     PLANNED = "planned"
     ORDERED = "ordered"
     SHIPPED = "shipped"
-    PARKED = "parked"
+    SHELTERED = "sheltered"
     RECEIVED = "received"
-    MISSED = "missed"
 
 
 class Status(StrEnum):
     STORED = "stored"
     ACTIVE = "active"
+    PARKED = "parked"
     MAINTENANCE = "maintenance"
     RETIRED = "retired"
 
@@ -77,7 +91,9 @@ class AssetId:
 
     def __post_init__(self) -> None:
         if not _ASSET_ID.fullmatch(self.value):
-            raise ValueError("asset id must be one uppercase letter followed by three digits")
+            raise ValueError(
+                "asset id must be one uppercase letter followed by three digits"
+            )
 
     def __str__(self) -> str:
         return self.value
@@ -136,7 +152,10 @@ class Control:
                 raise ValueError("dcc control cannot reference an accessory node")
             if self.address is not None and self.address < 1:
                 raise ValueError("dcc address must be positive")
-        elif any(value is not None for value in (self.decoder, self.address, self.speed_steps, self.sound)):
+        elif any(
+            value is not None
+            for value in (self.decoder, self.address, self.speed_steps, self.sound)
+        ):
             raise ValueError("decoder, address, speed_steps and sound require dcc=true")
         if self.node_id is not None and not self.node_id.value.startswith("N"):
             raise ValueError("control node_id must start with N")
@@ -227,13 +246,17 @@ class Asset:
     def __post_init__(self) -> None:
         expected_prefix = PREFIXES[self.family]
         if self.id.value[0] != expected_prefix:
-            raise ValueError(f"{self.family.value} id must start with {expected_prefix}")
+            raise ValueError(
+                f"{self.family.value} id must start with {expected_prefix}"
+            )
         _require_snake_case("asset type", self.type)
         if self.type not in TYPES[self.family]:
             raise ValueError(f"unsupported {self.family.value} type: {self.type}")
         if self.label is not None and not self.label.strip():
             raise ValueError("label cannot be blank")
-        if len({component.ref for component in self.components}) != len(self.components):
+        if len({component.ref for component in self.components}) != len(
+            self.components
+        ):
             raise ValueError("component refs must be unique within an asset")
         if any(relation.asset_id == self.id for relation in self.relations):
             raise ValueError("asset cannot relate to itself")
@@ -243,7 +266,9 @@ class Asset:
         payload["id"] = self.id.value
         if self.control is not None and self.control.node_id is not None:
             payload["control"]["node_id"] = self.control.node_id.value
-        for relation, serialized in zip(self.relations, payload.get("relations", []), strict=True):
+        for relation, serialized in zip(
+            self.relations, payload.get("relations", []), strict=True
+        ):
             serialized["asset_id"] = relation.asset_id.value
         return payload
 
@@ -268,8 +293,10 @@ class Lifecycle:
             raise ValueError("received asset requires a status")
         if self.possession is not Possession.RECEIVED and self.status is not None:
             raise ValueError("only a received asset can have an inventory status")
-        if self.status is Status.ACTIVE and not self.location:
-            raise ValueError("active asset requires a location")
+        if self.location is not None and self.location not in LOCATIONS:
+            raise ValueError("Unknown layout location")
+        if self.status in (Status.ACTIVE, Status.PARKED) and not self.location:
+            raise ValueError("active or parked asset requires a layout location")
         if self.status is Status.RETIRED and self.retired_on is None:
             raise ValueError("retired asset requires retired_on")
         if self.retired_on is not None and self.status is not Status.RETIRED:
@@ -303,8 +330,8 @@ class Consist:
         return payload
 
 
-def is_block(location: str | None) -> bool:
-    return location is not None and _BLOCK.fullmatch(location) is not None
+def is_layout_location(location: str | None) -> bool:
+    return location in LOCATIONS
 
 
 def _require_snake_case(label: str, value: str) -> None:

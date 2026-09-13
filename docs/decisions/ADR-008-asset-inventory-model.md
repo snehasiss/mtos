@@ -188,7 +188,7 @@ Lifecycle is separate from the asset master:
   "asset_id": "L001",
   "possession": "received",
   "status": "active",
-  "location": "block25",
+  "location": "test_main_1",
   "ordered_on": "2026-01-02",
   "shipped_on": "2026-01-08",
   "received_on": "2026-01-12",
@@ -200,17 +200,16 @@ Lifecycle is separate from the asset master:
 Possession values are:
 
 ```text
-planned | ordered | shipped | parked | received | missed
+planned | ordered | shipped | sheltered | received
 ```
 
-`parked` means acquisition is intentionally paused. `missed` means acquisition
-ended without receiving the asset, including a cancelled order or missed
-opportunity.
+`sheltered` replaces the previous possession value `parked`. The `missed` value
+has been removed. `parked` now belongs only to inventory status.
 
 Status values are:
 
 ```text
-stored | active | maintenance | retired
+stored | active | parked | maintenance | retired
 ```
 
 `stored` includes boxed, `active` includes installed, and `maintenance` includes
@@ -218,12 +217,22 @@ repair and workshop work. `retired` is a status, not possession: a retired asset
 can still be physically owned. A future disposition such as sold or scrapped can
 be added separately if required.
 
+`parked` means the asset is somewhere on the layout but is not actively operating.
+
 Rules:
 
 - Only `received` assets have an inventory status.
 - A received asset must have a status.
-- An active asset must have a location.
-- Active rolling stock uses a block location such as `block25`.
+- Active and parked assets must have a valid layout location.
+- Every non-null location must belong to the following vocabulary:
+
+```text
+main_west_1, main_west_2, main_east_1, main_east_2
+main_north_1, main_north_2, main_south_1, main_south_2
+yard_west_1, yard_west_2, yard_west_3, yard_west_4
+yard_south_1, yard_south_2, yard_south_3, yard_south_4
+park_1, park_2, test_main_1, test_prog_1
+```
 - A retired asset has `retired_on`; records and IDs are retained and IDs are never
   reused.
 - `scope` and display status are not part of version 1.
@@ -270,17 +279,91 @@ appear in a consist.
 
 ### Media
 
-Media rows reference an asset and store metadata for an original file and optional
-thumbnail. Binary data is not embedded in asset JSON. Image upload, orientation
-correction, resizing, classification, and primary-image selection are application
-operations.
+Media metadata references an asset; binary data is not embedded in asset JSON or
+SQLite. Files live below `data/media/<asset_id>/`. Stored filenames use the
+asset ID and input sequence beginning at one:
+
+```text
+data/media/L001/L001_1.jpg
+data/media/L001/L001_2.jpg
+```
+
+The composite `(asset_id, sequence)` identifies an image, so a separate global
+media ID is unnecessary. Deleted sequence numbers are not reused and existing
+files are not renumbered. For stationary assets without a reporting mark and road
+number, the asset ID is the filename stem, for example
+`data/media/G013/G013_1.jpg`.
+
+The JSON media collection provides one generated `base_url` and filenames. The
+base URL is not persisted because it depends on deployment:
+
+```json
+{
+  "asset_id": "L001",
+  "base_url": "/api/assets/L001/media/",
+  "images": [
+    { "filename": "L001_1.jpg", "view": "left_side" },
+    { "filename": "L001_2.jpg", "view": "right_side" }
+  ]
+}
+```
+
+The utility in `tools/` scans a directory using:
+
+```bash
+python3 tools/import_image.py --source ~/Pictures/train-photos/
+```
+
+It resolves `REPORTINGMARKROADNUMBER_n.jpg` or `ASSETID_n.jpg` against the roster.
+Other assets use direct IDs, e.g. `G013_1.jpg`; type-only filenames cannot identify
+an individual asset. Unknown or ambiguous identities are reported without import.
+All output uses `ASSETID_n.jpg`. Existing destinations are skipped.
+
+Defaults are `data/db/mtos.sqlite3` and `data/media` relative to the project root;
+`MTOS_DATA_DIR` or the utility's `--data-dir` overrides the root. The importer
+queries `asset` and `prototype`, and registers each photo in the `media` table
+through the same transaction/locking boundary used by Flask and backups.
+
+Each new Pillow-supported source image has EXIF orientation applied, is converted
+to RGB JPEG, and is fitted within a 1280-by-720 bounding box using high-quality
+resampling. It is never stretched, cropped, or upscaled. JPEG output is progressive
+and optimized. Input sequence numbers are preserved.
+
+Media is operational user data and is excluded from the MTOS source repository.
+Git history is not a backup mechanism for changing JPEG and SQLite data. The
+SQLite database and the complete media tree form one backup unit. A consistent
+backup first uses SQLite's online backup facility, then captures that database
+copy and `data/media` in the same versioned snapshot. A plain one-way mirror is
+insufficient because deletion or corruption would immediately propagate.
+
+Backups are manually invoked using `tools/mtos_backup --remote ~/gdrive/backup/mtos/data --backup`.
+The destination must already exist; removable media need not always be mounted.
+No automation is installed. The same command may later be scheduled with cron by
+the operator. SHA-256 manifests, database integrity checks and media checksums
+are verified before a snapshot is published. `--restore` selects the newest
+completed snapshot in the remote directory, verifies it, and replaces local data
+only while services are stopped. Previous local data is retained in a dated
+`data.before-restore-*` directory. `--restore-to` optionally targets a new
+directory. Keep snapshots on a separate device.
 
 ## Application boundary
 
-The domain is implemented as dependency-free Python value objects and aggregate
-rules first. SQLite repositories and the Flask JSON API will follow without
-changing the domain vocabulary. The mobile UI is iPhone-first: compact payloads
-omit absent optional values and support progressive asset entry.
+The service is `asset_manager`, on port 5301. Its launcher is
+`tools/asset_manager (start|stop|restart|status)`. The future `asset_control`
+service reserves port 5302 and `tools/asset_control`; no hardware control is
+implemented as part of the asset-manager change.
+
+The Python domain is served through a Flask JSON API and an iPhone-first HTML
+interface. SQLite tables normalize asset, model, prototype, control, component,
+relation, lifecycle, media, consist and ordered consist_unit records. Master and
+lifecycle writes share one transaction and aggregate revision; stale edits fail
+with HTTP 409. The legacy_document table preserves all migration source JSON,
+including fields which have no direct equivalent. Acquisition source, price and
+legacy acquisition date are retained in lifecycle.acquisition.
+
+The UI supports add, search, edit, retirement through lifecycle status, ordered
+consist editing, photo upload and gallery display. Configuration editing records
+inventory information only; it does not program a decoder or actuate hardware.
 
 Asset management does not publish MQTT commands or model live railroad operation.
 Those concerns will receive separate decisions after the roster is complete.

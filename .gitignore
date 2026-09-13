@@ -4,3 +4,10 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+data/media/
+data/db/
+data/run/
+data/backups/
+data/.lock
+.*.services.lock
+data.before-restore-*/

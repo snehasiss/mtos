@@ -1,0 +1,176 @@
+"""Flask application factory for the MTOS asset library."""
+
+import os
+import secrets
+import sqlite3
+import tempfile
+from pathlib import Path
+
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+)
+from werkzeug.exceptions import HTTPException
+
+from .assets.model import LOCATIONS, TYPES, Possession, Status
+from .roster import Conflict, Roster
+
+
+def create_app(config=None):
+    app = Flask(__name__)
+    app.config.update(
+        MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Strict",
+    )
+    app.config.update(config or {})
+    roster = Roster(app.config.get("DATA_ROOT"))
+    app.extensions["roster"] = roster
+    secret = roster.root / "db/session.key"
+    with roster.lock():
+        if not secret.exists():
+            with secret.open("x") as stream:
+                stream.write(secrets.token_hex(32))
+            secret.chmod(0o600)
+        app.secret_key = secret.read_text()
+
+    @app.before_request
+    def protect_writes():
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            expected = session.get("csrf")
+            if not expected or not secrets.compare_digest(
+                expected, request.headers.get("X-CSRF-Token", "")
+            ):
+                abort(
+                    403, description="Missing or invalid CSRF token; reload the page."
+                )
+
+    @app.after_request
+    def headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'"
+        )
+        if request.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.errorhandler(Exception)
+    def errors(error):
+        if isinstance(error, HTTPException):
+            return jsonify(error=error.description), error.code
+        if isinstance(error, KeyError):
+            return jsonify(
+                error=f"Asset or required field not found: {error.args[0]}"
+            ), 404
+        if isinstance(error, (Conflict, sqlite3.IntegrityError)):
+            return jsonify(error=str(error)), 409
+        if isinstance(error, (ValueError, TypeError)):
+            return jsonify(error=str(error)), 400
+        app.logger.exception("Roster request failed")
+        return jsonify(error="Internal server error"), 500
+
+    @app.get("/")
+    def index():
+        session.setdefault("csrf", secrets.token_hex(32))
+        return render_template("roster.html", csrf=session["csrf"])
+
+    @app.get("/api/session")
+    def api_session():
+        session.setdefault("csrf", secrets.token_hex(32))
+        return jsonify(csrf=session["csrf"])
+
+    @app.get("/health")
+    def health():
+        with roster.connect() as db:
+            db.execute("SELECT 1 FROM asset LIMIT 1")
+        return jsonify(
+            status="ok",
+            service="asset_manager",
+            pid=os.getpid(),
+            instance=os.environ.get("MTOS_INSTANCE"),
+        )
+
+    @app.get("/api/schema")
+    def schema():
+        return jsonify(
+            families={family.value: sorted(types) for family, types in TYPES.items()},
+            possession=[s.value for s in Possession],
+            status=[s.value for s in Status],
+            locations=list(LOCATIONS),
+        )
+
+    @app.get("/api/assets")
+    def assets():
+        return jsonify(
+            roster.search(
+                **{
+                    k: request.args[k]
+                    for k in ("q", "family", "status", "limit", "offset")
+                    if k in request.args
+                }
+            )
+        )
+
+    @app.post("/api/assets")
+    def add():
+        return jsonify(roster.save(request.get_json())), 201
+
+    @app.get("/api/assets/<asset_id>")
+    def get(asset_id):
+        return jsonify(roster.get(asset_id))
+
+    @app.patch("/api/assets/<asset_id>")
+    def update(asset_id):
+        return jsonify(roster.save(request.get_json(), asset_id=asset_id))
+
+    @app.get("/api/assets/<asset_id>/media")
+    def media(asset_id):
+        return jsonify(roster.get(asset_id)["media"])
+
+    @app.get("/api/assets/<asset_id>/media/<filename>")
+    def photo(asset_id, filename):
+        images = roster.get(asset_id)["media"]["images"]
+        if filename not in {image["filename"] for image in images}:
+            abort(404)
+        return send_from_directory(roster.media / asset_id, filename)
+
+    @app.post("/api/assets/<asset_id>/media")
+    def upload(asset_id):
+        image = request.files.get("image")
+        if image is None:
+            raise ValueError("image upload required")
+        sequence = int(request.form["sequence"])
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "upload"
+            image.save(source)
+            created = roster.put_media(
+                asset_id,
+                sequence,
+                source,
+                optimize=True,
+                view=request.form.get("view"),
+                caption=request.form.get("caption"),
+            )
+        if not created:
+            raise Conflict("Image sequence already exists")
+        return jsonify(roster.get(asset_id)["media"]), 201
+
+    @app.get("/api/consists")
+    def consists():
+        return jsonify(items=roster.consists())
+
+    @app.post("/api/consists")
+    def add_consist():
+        return jsonify(roster.save_consist(request.get_json())), 201
+
+    @app.patch("/api/consists/<consist_id>")
+    def update_consist(consist_id):
+        return jsonify(roster.save_consist(request.get_json(), consist_id))
+
+    return app

@@ -16,6 +16,8 @@ from proposals still under discussion.
 
 ## Working architecture
 
+- [Run, migrate and back up the roster](operations/roster.md)
+
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)
 - [Domain vocabulary](domain/vocabulary.md)
