@@ -150,13 +150,13 @@ A turnout stores its actuator and wiring once:
       "type": "servo",
       "desc": "sg90",
       "connection": { "bus": "servo", "channel": 3 },
-      "values": { "normal": 310, "reverse": 470 }
+      "values": { "straight": 310, "diverging": 470 }
     }
   ]
 }
 ```
 
-There is no separate `outputs` array. `normal` and `reverse` are domain values;
+There is no separate `outputs` array. `straight` and `diverging` are domain values;
 their numbers are calibrated PCA9685 positions.
 
 A three-aspect signal has three LED components:

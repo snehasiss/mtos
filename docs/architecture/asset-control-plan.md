@@ -1,4 +1,11 @@
-# asset_control: requirements review and implementation plan
+# asset_control: predecessor DCC review and implementation notes
+
+> This 2026-09-13 document is retained as the detailed EX-CSB1 predecessor review.
+> The broader 2026-09-14 control scope and current checkpoint are defined by
+> [asset-control-pre-design.md](asset-control-pre-design.md) and
+> [asset-control-device-interfaces.md](asset-control-device-interfaces.md).
+> MAIN/PROG and CV work described below is now explicitly parked until the second
+> isolated track can be completed; it is not part of the first coding increment.
 
 Date: 2026-09-13. Status: proposed, not an accepted ADR or coding authorization.
 Scope: first DCC-EX control increment on port 5302, using Python/Flask and an

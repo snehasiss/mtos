@@ -1,7 +1,7 @@
 # ADR-007: Stationary assets, control network, and power management
 
 - Status: Accepted; equipment currents require commissioning measurements
-- Date: 2026-09-07
+- Date: 2026-09-07; revised 2026-09-14
 - Supersedes: ADR-004, ADR-005, and ADR-006
 
 ## Context
@@ -54,7 +54,9 @@ data includes:
 
 - asset ID, type, description, location, and lifecycle;
 - accessory-node membership;
-- PCA9685 board address and output-channel mapping;
+- node-resident asset-to-output mapping and its configuration revision;
+- PCA9685 servo channel and endpoint mapping;
+- 74HC595 signal aspect/output mapping;
 - turnout endpoints, direction, movement timing, and safe-state policy;
 - signal type, supported aspects, LED mapping, and safe aspect;
 - trackside-equipment voltage, current, driver, actions, and safety policy; and
@@ -70,9 +72,11 @@ retained message or ESP32 variable is not the authoritative asset record.
 
 The initial inventory contains 20 PECO Insulfrog turnouts, including SL-95,
 SL-96, and SL-90 double slips. Each actuator is an SG90 9 g servo. A turnout
-uses the domain states `straight` and `diverging`; a double slip has two
-independently mapped and calibrated actuators coordinated by its turnout
-behavior.
+uses only the domain states `straight` and `diverging`; `normal` and `reverse`
+are not turnout states. A PECO SL-90 Code 100 double slip has two SG90 servos.
+Both actuators are independently mapped and calibrated, and the node coordinates
+them as one turnout operation whose requested state remains `straight` or
+`diverging`.
 
 PECO over-centre springs are removed. Each servo uses a compliant linkage made
 from 0.8–1.0 mm spring-steel piano wire. Firmware sweeps slowly between
@@ -92,13 +96,16 @@ The initial signal inventory is:
 Aspect values are lowercase domain values. A two-aspect signal rejects `slow`,
 and every signal rejects an unknown value rather than silently choosing an
 aspect. `stop` is the safe aspect after invalid commands or uncertain route
-state. Physical colors, polarity, resistors, drivers, PCA9685 channels, and
+state. Physical colors, polarity, resistors, 74HC595 outputs, drivers, and
 brightness are deployment configuration rather than domain values.
 
 The initial signal LEDs are rated approximately 2 V, 2 mA. Every LED has an
 individual calculated current-limiting resistor. From 5 V, a 2 V LED at 2 mA
-uses 1.5 kΩ. Transistor or MOSFET drivers are used when electrical topology,
-load, or wiring makes direct PCA9685 drive unsuitable.
+uses 1.5 kΩ. Signal state is shifted from the ESP32 through cascaded 74HC595
+registers. Every aspect has its own current-limiting resistor. Transistor or
+MOSFET stages are added when voltage, aggregate current, polarity, or wiring
+makes direct shift-register output unsuitable. PCA9685 outputs are not used for
+signals.
 
 ### Trackside equipment
 
@@ -121,12 +128,14 @@ An accessory node is the complete local control and power assembly. It
 contains:
 
 - one ESP32 CP2102 dual-core Wi-Fi development board with 30 pins;
-- one PCA9685 16-channel servo/PWM driver for a standard node;
-- one LM2596 12 V-to-5 V buck converter;
+- one PCA9685 16-channel driver used only for SG90 turnout servos;
+- one or more cascaded 74HC595 shift registers for signal aspects;
+- one XL4015 12 V-to-5 V buck converter, replacing LM2596;
 - a fused 12 V accessory-bus input;
-- separate local routing for logic, servo, and driven outputs;
-- 3.3 V-compatible PCA9685 logic/I2C wiring;
-- current-limited signal outputs and required drivers;
+- separate local routing for logic, servo, signal, and machine outputs;
+- 3.3 V-compatible PCA9685 logic/I2C wiring, with a separate 5 V servo rail;
+- ESP32 data, clock, and latch connections to the 74HC595 chain;
+- current-limited 74HC595 signal outputs and required driver stages;
 - labelled, detachable load and power connectors;
 - normal converter-specified input/output decoupling; and
 - serviceable mounting or an enclosure.
@@ -134,24 +143,37 @@ contains:
 An accessory cluster is the geographical collection of turnouts, signals,
 sensors, and equipment served by one node. It is not another controller.
 
-Four nodes support the initial installation. The 12 two-aspect and eight
-three-aspect signals require 48 independently driven aspect outputs. Together
-with 20 servo outputs, the installation needs 68 PCA9685 channels. Five
-16-channel boards provide 80 channels and leave 12 spare:
+Four nodes support the initial installation. Each node has exactly one PCA9685,
+providing 64 total servo channels. Only SG90 turnout actuators consume these
+channels. The final actuator count is the number of servo components, not merely
+the number of turnout assets: an SL-90 double slip consumes two channels.
 
-| Controllers | PWM boards | Assigned channels | Spare channels |
-| ---: | ---: | ---: | ---: |
-| 4 ESP32 nodes | 5 PCA9685 boards | 20 servo + 48 signal aspect = 68 | 12 |
+The 12 two-aspect and eight three-aspect signals require 48 independently driven
+aspect outputs. 74HC595 registers provide eight outputs each, so six registers is
+the system minimum. A regular layout of two cascaded registers per node provides
+64 outputs and 16 spares; the final number and distribution follow the geographic
+signal map and per-chip current validation.
 
-One node therefore has two addressed, daisy-chained PCA9685 boards. The final
-geographical channel map may place the expansion board on a different node or
-redistribute boards, but it must preserve capacity for every individual signal
-aspect rather than count one channel per signal mast.
+| Controllers | Output device | Capacity | Initial use |
+| ---: | --- | ---: | ---: |
+| 4 ESP32 nodes | 4 PCA9685 boards | 64 servo channels | One or two per turnout |
+| 4 ESP32 nodes | At least 6 74HC595 registers | At least 48 signal outputs | 48 aspects |
+
+The ESP32 stores the mapping from stable turnout/signal asset IDs to its local
+PCA9685 servo channels or 74HC595 aspect outputs. The mapping carries a
+configuration revision and is not inferred from MQTT topics. The Cubietruck
+publishes logical asset ID and desired state; a mismatched node configuration
+revision is rejected rather than operating an assumed channel.
 
 The ESP32 communicates with Mosquitto on the Cubietruck using MQTT over Wi-Fi.
-The ESP32-to-PCA9685 connection is a short local I2C bus. DHCP reservations may
-provide stable addresses for diagnosis, but asset and MQTT identity use `Nnnn`
-IDs and do not depend on IP addresses.
+The ESP32-to-PCA9685 connection is a short local I2C bus. The ESP32-to-74HC595
+connection uses short local serial data, clock, and latch lines; cascaded register
+outputs select signal aspects. DHCP reservations may provide stable addresses for
+diagnosis, but asset and MQTT identity use `Nnnn` IDs and do not depend on IP
+addresses.
+
+The component and power connections are shown in
+[the asset-control connection diagram](../images/asset-control-connections.svg).
 
 Locomotive and track-power control remain on the dedicated Cubietruck-to-
 EX-CSB1 serial path. MQTT or Wi-Fi failure can make stationary accessories
@@ -280,24 +302,26 @@ to be revisited.
 
 The accessory supply feeds a parallel two-conductor 16 or 18 AWG 12 V bus,
 electrically separate from the DCC bus. Each node converts locally to 5.0 V
-using its LM2596. Five volts feeds SG90 `V+` and the documented 5 V/VIN input of
+using its XL4015. Five volts feeds SG90 `V+` and the documented 5 V/VIN input of
 the ESP32 board. PCA9685 logic `VCC` is 3.3 V where the board's I2C pull-ups are
-referenced to it. Cluster grounds are common because the selected converter is
-non-isolated.
+referenced to it; PCA9685 `V+` is the separate 5 V servo rail. The 74HC595 logic
+supply and interface must be configured for ESP32-compatible 3.3 V logic. Cluster
+grounds are common because the selected converter is non-isolated.
 
 The initial peak planning calculation is:
 
 | Load | Planning power |
 | --- | ---: |
 | Four ESP32 boards, 0.5 A each at 5 V | 10.0 W |
-| Five PCA9685 boards, 0.05 A each at 5 V | 1.25 W |
+| Four PCA9685 boards, 0.05 A each at 5 V | 1.00 W |
+| Six to eight 74HC595 signal registers | Included in logic margin; verify measured load |
 | One SG90 startup/stall allowance, 1.0 A at 5 V | 5.0 W |
 | Twenty simultaneously illuminated 2 mA signal LEDs | 0.2 W |
-| Approximate LM2596 conversion loss | 2.9 W |
+| Approximate XL4015 conversion loss | 2.9 W provisional |
 | `E001` water tower provisional allowance | 12.0 W |
 | `E002` chemical-plant lights provisional allowance | 2.4 W |
-| **Calculated peak** | **33.8 W** |
-| **Peak with 25% reserve** | **42.2 W / 3.52 A at 12 V** |
+| **Calculated peak** | **33.5 W plus measured shift-register logic load** |
+| **Peak with 25% reserve** | **About 42 W / 3.5 A at 12 V; confirm by measurement** |
 
 A 12 V, 5 A supply provides 60 W and approximately 18 W of unallocated
 capacity above the current reserved peak. Additional trackside assets trigger
@@ -323,15 +347,16 @@ does not replace a fuse or protect against a shorted cable or failed servo.
 | Fused DC distribution block | 1 | At least 8 branches plus expansion |
 | Main accessory bus | As installed | Two-conductor 16/18 AWG |
 | ESP32 CP2102 dual-core 30-pin board | 4 | One per node |
-| PCA9685 16-channel board | 5 | One per node plus one addressed expansion board |
-| LM2596 buck converter | 4 | Tested 5 V, 3 A continuous node output |
+| PCA9685 16-channel board | 4 | Exactly one per node; SG90 servo signals only |
+| 74HC595 shift register | 6 minimum; 8 if two per node | Cascaded signal-aspect outputs; final quantity follows geographic map |
+| XL4015 buck converter | 4 | One per node; tested 12 V-to-5 V continuous output |
 | Node input protection | 4 sets | Fuse/PTC, polarity protection, disconnect |
 | Node enclosure or mounting plate | 4 | Serviceable and labelled |
 | SG90 9 g servo | 20 plus spares | Five installed per node |
 | Servo bracket and linkage | 20 sets | Includes 0.8–1.0 mm piano wire |
 | Signal LED aspect circuits | 48 | 24 for 12 two-aspect and 24 for 8 three-aspect signals |
 | 1.5 kΩ LED resistor | 48 | One per 2 V/2 mA aspect; appropriate voltage and power rating |
-| Signal driver channels | 48 | Direct PCA9685 drive only where electrically validated; otherwise transistor/MOSFET stages |
+| Signal driver channels | 48 | 74HC595 outputs with one resistor per LED; transistor/MOSFET stages where electrically required |
 | Isolated dry-contact interface | At least 1 | Water-tower trigger |
 | Trackside fused branches | 2 initially | One per `E` asset |
 | Terminal blocks, connectors, wire, labels | As installed | Sized and polarized for each branch |

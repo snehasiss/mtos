@@ -118,7 +118,7 @@ is one integral stationary asset containing its electronics. Wiring is recorded
 once in `components`; there is no redundant `outputs` array. A turnout may use
 `control: {"node_id":"N001"}` and a servo component with `ref: "actuator"`,
 `desc: "sg90"`, `connection: {"bus":"servo","channel":3}` and calibrated
-`values: {"normal":310,"reverse":470}`. These numbers are illustrative, not
+`values: {"straight":310,"diverging":470}`. These numbers are illustrative, not
 universal calibration. Signal LED refs are `stop`, `slow`, `go`, with descriptions
 `red`, `yellow`, `green`; suffixes such as stop_led/red_smd are unnecessary.
 
@@ -434,15 +434,14 @@ ratings or a current validated purchasing specification.
 1. ADR-008 supersedes ADR-003 for inventory; ADR-007 supersedes ADR-004/005/006
    for its original control consolidation. Older docs are historical, not all
    simultaneous current contracts.
-2. ADR-007 still says LM2596 and four nodes/five PCA9685 boards, including one
-   two-board node. This conflicts with the later one-PCA9685/XL4015 decision.
-   Its 68-channel calculation assumes 20 servo outputs plus 48 individual signal
-   aspect outputs; it must not be reused as a validated map for the newer node
-   design. Double-slip actuator counts also need a concrete channel map.
+2. ADR-007 was revised on 2026-09-14 for one PCA9685 and one XL4015 per node.
+   PCA9685 channels are servo-only; signal aspects use 74HC595 outputs. Its
+   earlier combined 68-channel PCA9685 calculation is historical and must not be
+   reused. Double-slip turnouts consume two coordinated servo channels.
 3. ADR-008 mentions 74HC595 node components, but no working signal-driver hardware
    is implemented. Do not treat that mention as completed hardware verification.
-4. ADR-007 turnout terminology straight/diverging differs from ADR-008 inventory
-   calibration normal/reverse. Resolve deliberately before control implementation.
+4. Turnout state and calibration keys are now consistently `straight` and
+   `diverging`; `normal` and `reverse` are not MTOS v1 domain values.
 5. Power budgets, resistor values, converter capability, idle/stall behavior,
    branch fuses and native water-tower current still require physical validation.
    This checkpoint does not revise the BOM or give electrical certification.
@@ -701,3 +700,97 @@ skipped. Python compilation and Git whitespace checks passed. Restarting the liv
 asset_manager was blocked by OS process ownership in the Codex sandbox; the owner
 must run `tools/asset_manager restart` before testing imports/uploads or reviewing
 the uncached UI. No commit was made and no asset_control work was started.
+
+### 2026-09-14: asset_control pre-design checkpoint
+
+The owner authorized planning and review only, followed by a pause for manual
+review/commit. No control code, migration, UI, device connection, MQTT publish,
+serial write, CV operation, or physical command was created or executed.
+
+The current control scope has two independent control points in one Flask service
+on `0.0.0.0:5302`: synchronous/bounded EX-CSB1 MAIN locomotive control over USB
+serial, and asynchronous durable/queued stationary control through ESP32 nodes
+over MQTT. Both consume authoritative asset/configuration data from the existing
+`data/db/mtos.sqlite3`; no second roster or JSON store is allowed. The Cubietruck
+is the sole producer/scheduler. Axon remains reserved for later SLM/autonomy.
+
+The initial operations are direct low-level asset commands: CSB1 readiness/power,
+locomotive throttle/direction/functions/stop/emergency-stop; turnout servo state;
+mutually exclusive signal aspect; and a defined machine action when its electrical
+interface exists. Routes, blocks, interlocking, occupancy, dispatching, and
+autonomy are later high-level consumers and are excluded now.
+
+MAIN/PROG role switching and CV programming are explicitly parked. The physical
+state remains one test track on CSB1 MAIN; the second isolated track cannot yet be
+wired because connectors are unavailable. This limitation does not block the MAIN
+or ESP32 foundations.
+
+The predecessor `/Users/snehasis/project/union-pacific-layout/src/csb1` was
+reviewed. Reusable concepts are DCC-EX framing/encoding, discovery metadata,
+selected parsers, roster-driven selection, and mobile UX. Its controller must not
+be copied unchanged: an open port is treated as connected before handshake, queued
+commands can survive disconnect, serial-error cleanup is incomplete, request
+locking is not an atomic scheduler, priority writes do not cancel stale commands,
+and desired values are presented optimistically as state. Its CV tests use mocked
+responses, not commissioned hardware. Legacy ESP32 directories are placeholders.
+
+New review documents:
+
+- `docs/architecture/asset-control-pre-design.md`: objective, boundaries, two
+  execution models, eligibility, state vocabulary, low-level operations, safety,
+  parked scope, knowns/unknowns, UI direction, and staged implementation plan.
+- `docs/architecture/asset-control-device-interfaces.md`: typed synchronous DCC
+  and asynchronous accessory interfaces, predecessor disposition, exact ADR-007
+  MQTT topics/envelope basis, acknowledgement/completion meaning, scheduling,
+  output behavior, fake transports, and unresolved device decisions.
+- `docs/architecture/asset-control-plan.md`: retained as the detailed predecessor
+  DCC/MAIN-PROG review and linked to the new controlling pre-design.
+
+Accepted ADR-007 MQTT specifics remain the baseline: MQTT 3.1.1 compatibility,
+Mosquitto/Paho, QoS 1 non-retained commands, plural node topics, retained
+availability/LWT, per-boot `boot_id`, `command_id`, configuration revision,
+expiry, duplicate-result caching, and producer-side capacity one for turnout
+servos. Turnout state and calibration now use `straight/diverging` consistently;
+the earlier `normal/reverse` proposal is superseded.
+
+The next authorized phase, after owner review and commit, is implementation in
+safe increments with fake devices first. Automated tests must never contact live
+serial/MQTT/GPIO. Hardware commissioning remains separately supervised. The later
+implementation checkpoint is expected to add accepted ADRs and an SVG internal
+connection schematic. No commit was made by Codex.
+
+### 2026-09-14: stationary-control hardware decision refinement
+
+ADR-007 was revised before control implementation. An accessory node is one
+ESP32 with one PCA9685 dedicated exclusively to SG90 servo PWM, one XL4015 for
+local 12 V-to-5 V conversion, and one or more cascaded 74HC595 shift registers
+for mutually exclusive signal aspects. The ESP32 firmware stores the versioned
+logical mapping from turnout assets to PCA9685 channels and from signal aspects
+to 74HC595 output bits. MQTT commands identify assets and requested states; they
+do not expose physical channel numbers.
+
+Turnout states are exactly `straight | diverging`. This applies to single- and
+multi-actuator turnouts. A PECO SL-90 Code 100 double-slip is one turnout asset
+whose transition coordinates two SG90 components and therefore consumes two
+PCA9685 channels; partial movement is a failed operation requiring
+reconciliation. `normal | reverse` is not v1 terminology.
+
+The 20-turnout actuator count remains a planning input, not a guaranteed total:
+each double-slip adds one servo beyond the one-servo-per-turnout baseline. Four
+PCA9685 boards provide 64 servo channels. The specified 12 two-aspect and eight
+three-aspect signals require 48 independent aspect outputs. Six 74HC595 devices
+are the electrical minimum; fitting two per each of four nodes provides 64
+outputs and 16 spare. Exact signal current-limiting/driver circuitry remains a
+hardware commissioning decision and must respect both per-output and total
+shift-register current limits.
+
+The vector connection drawing is `docs/images/asset-control-connections.svg`.
+It covers the Cubietruck/EX-CSB1 DCC path and the complete accessory path:
+Cubietruck scheduler and Mosquitto, Wi-Fi/MQTT, ESP32 mapping, fused 12 V branch,
+XL4015, PCA9685/SG90 turnout actuation, 74HC595 signal outputs, machine driver,
+and node grounding. The architecture and device-interface documents link to it.
+
+This remains a documentation-only checkpoint. No asset_control implementation,
+device command, database migration, commit, or push was performed. The blank
+item 3 and malformed item 6 in the owner's source list were deliberately not
+interpreted as requirements.

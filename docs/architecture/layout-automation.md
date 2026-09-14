@@ -18,22 +18,25 @@ flowchart LR
     Track[DCC track bus]
     MQTT[Local Mosquitto]
     Node[ESP32 accessory node]
-    PWM[PCA9685, 50 Hz]
+    PWM[PCA9685, 50 Hz, servos only]
+    Shift[74HC595 signal outputs]
     Servo[SG90/MG90S turnout servo]
     Signal[Signal LED and current limiting/driver]
     Supply[12 V 5-10 A accessory supply]
-    Buck[Local LM2596 / 5.0 V]
+    Buck[Local XL4015 / 5.0 V]
 
     Core <--> DB
     Core --> Serial --> CSB --> Track
     Core <--> MQTT
     MQTT <-->|Wi-Fi, QoS 1| Node
     Node <-->|short I2C, initially 100 kHz| PWM
+    Node -->|data, clock, latch| Shift
     PWM --> Servo
-    PWM --> Signal
+    Shift --> Signal
     Supply -->|16/18 AWG two-core bus| Buck
     Buck --> Node
     Buck --> PWM
+    Buck --> Shift
     CSB -. electrically separate .- Supply
 ```
 
@@ -63,17 +66,18 @@ convenience, not a substitute for this model.
 ## Cluster profiles
 
 An accessory node is the local controller and power assembly: one ESP32 linked
-to the SBC's MQTT broker over Wi-Fi; one or more PCA9685 boards on short I2C;
-a protected 12 V bus connection; a local 12 V-to-5 V converter; separated
+to the SBC's MQTT broker over Wi-Fi; one PCA9685 servo board on short I2C;
+cascaded 74HC595 signal-output registers; a protected 12 V bus connection; one
+local XL4015 12 V-to-5 V converter; separated
 logic, servo, and driven-output distribution; and the connectors, decoupling,
 identification, and service provisions for its assigned loads. An accessory
 cluster is the geographical collection of turnouts, signals, sensors, lighting,
 and other devices served by that node.
 
-- The initial layout uses four ESP32 nodes and five PCA9685 boards. One node has
-  two addressed, daisy-chained boards.
-- Twenty turnout outputs plus 48 individual signal-aspect outputs consume 68
-  of the available 80 PWM channels and leave 12 spare.
+- The initial layout uses four ESP32 nodes and four PCA9685 boards, exactly one
+  per node. PCA9685 channels are reserved for SG90 turnout servos.
+- Forty-eight individual signal-aspect outputs require at least six cascaded
+  74HC595 registers; two per node provides 64 outputs and 16 spares.
 - A PECO SL-90 double slip consumes two separately calibrated servo channels.
 
 Servos are powered from the node's local 5 V rail, but PWM is normally disabled
@@ -84,7 +88,7 @@ The detailed load allowances and the separate Axon/Cubietruck computer-power
 domain are specified in ADR-005.
 
 Each node configuration records its stable node ID, firmware and configuration
-revision, PCA9685 I2C addresses, accessory-to-channel mappings, and health data.
+revision, PCA9685 servo mappings, 74HC595 signal mappings, and health data.
 Each turnout mapping records straight and diverging pulse endpoints, current
 and safe startup policies, movement step and timing, inversion, and optional
 feedback inputs. Each signal mapping records all supported aspects, electrical
