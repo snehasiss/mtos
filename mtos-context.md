@@ -794,3 +794,19 @@ This remains a documentation-only checkpoint. No asset_control implementation,
 device command, database migration, commit, or push was performed. The blank
 item 3 and malformed item 6 in the owner's source list were deliberately not
 interpreted as requirements.
+
+### 2026-09-15: asset library card information hierarchy
+
+The asset-manager library card was refined from an iPhone screenshot. The
+status badge now occupies the upper-right of the information area, top-aligned
+with reporting mark and road number. Asset ID, family and type remain the compact
+monospace middle row. Prototype builder and model now form the bottom row when
+available. The card body stretches to the image height on mobile so the builder
+row stays anchored at the bottom without increasing card height. This was a
+presentation-only change; asset data, API payloads and lifecycle semantics did
+not change. No commit or push was performed.
+
+After iPhone review, the flexible card space was moved above the classification
+and builder rows so those two rows stay together at the bottom. Only the asset ID
+uses fixed-width text; family and type now use the same normal UI font as the
+prototype builder and model. Desktop card behavior remains consistent.

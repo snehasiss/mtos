@@ -123,6 +123,11 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     assert b'name="relations"' not in page.data
     assert b'name="attributes"' not in page.data
     assert b'name="purchased_on"' in page.data and b'name="retired_on"' not in page.data
+    script = client.get("/static/roster.js").data
+    assert b"card-top" in script
+    assert b"builder-model" in script
+    assert b"asset-id" in script
+    assert b"asset.prototype?.maker,asset.prototype?.model" in script
     assert client.post("/api/assets", json=loco()).status_code == 403
     token = client.get("/api/session").json["csrf"]
     headers = {"X-CSRF-Token": token}

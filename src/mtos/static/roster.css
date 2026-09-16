@@ -27,10 +27,13 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid #
 .card{text-align:left;background:white;color:#223238;overflow:hidden;padding:0;border:1px solid #dce1db;border-radius:10px}
 .card img,.placeholder{width:100%;aspect-ratio:16/9;object-fit:cover;background:#eeeee7}
 .placeholder{display:grid;place-items:center;font-size:22px;color:#6c7d75}
-.card .body{padding:10px 12px}
+.card .body{display:flex;flex-direction:column;padding:10px 12px}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .card strong{display:block;font-size:16px;line-height:1.2;font-weight:400}
-.meta{color:#52615d;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:5px 0 2px}
-.badge{display:inline-block;color:#315442;background:#dcefdc;border-radius:4px;padding:3px 8px;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.meta{color:#52615d;font-size:12px;line-height:1.2;margin:auto 0 1px}
+.asset-id{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.builder-model{min-height:1.2em;margin:0;color:#52615d;font-size:12px;line-height:1.2}
+.badge{display:inline-block;flex:0 0 auto;color:#315442;background:#dcefdc;border-radius:4px;padding:3px 8px;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .pages{display:flex;justify-content:space-between;margin:16px 0}
 .pages button{width:44px;height:44px;padding:0;display:grid;place-items:center;font:bold 24px/1 ui-sans-serif,system-ui,sans-serif}
 fieldset{border:1px solid #ddcfbc;border-radius:8px;padding:11px;margin:12px 0;background:var(--group)}
@@ -58,8 +61,8 @@ h1{font-size:25px}
 .cards{grid-template-columns:1fr}
 .card{display:grid;grid-template-columns:42% 58%}
 .card img,.placeholder{height:auto;align-self:center}
-.card .body{align-self:center;padding:5px 9px}
-.card .meta{margin:3px 0 2px}
+.card .body{align-self:stretch;padding:5px 9px}
+.card .meta{margin:auto 0 1px}
 fieldset{padding:9px}
 main{padding-inline:10px}
 }

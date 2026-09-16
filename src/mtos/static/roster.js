@@ -25,9 +25,14 @@ async function load(){
   if(media.length){const img=document.createElement('img');img.src=asset.media.base_url+media[0].filename;img.alt=title(asset);img.loading='lazy';card.append(img);}
   else{const empty=document.createElement('div');empty.className='placeholder';empty.textContent=asset.id;card.append(empty);}
   const body=document.createElement('div');body.className='body';
-  const name=document.createElement('strong');name.textContent=title(asset);body.append(name);
-  const meta=document.createElement('p');meta.className='meta';meta.textContent=`${asset.id} · ${asset.family} · ${asset.type}`;body.append(meta);
-  const badge=document.createElement('span');badge.className='badge';badge.textContent=asset.lifecycle.status||asset.lifecycle.possession;body.append(badge);card.append(body);$('#cards').append(card);
+  const top=document.createElement('div');top.className='card-top';
+  const name=document.createElement('strong');name.textContent=title(asset);top.append(name);
+  const badge=document.createElement('span');badge.className='badge';badge.textContent=asset.lifecycle.status||asset.lifecycle.possession;top.append(badge);body.append(top);
+  const meta=document.createElement('p');meta.className='meta';
+  const assetId=document.createElement('span');assetId.className='asset-id';assetId.textContent=asset.id;
+  const classification=document.createElement('span');classification.textContent=` · ${asset.family} · ${asset.type}`;meta.append(assetId,classification);body.append(meta);
+  const builder=document.createElement('p');builder.className='builder-model';builder.textContent=[asset.prototype?.maker,asset.prototype?.model].filter(Boolean).join(' · ');body.append(builder);
+  card.append(body);$('#cards').append(card);
  }
 }
 async function edit(id){
