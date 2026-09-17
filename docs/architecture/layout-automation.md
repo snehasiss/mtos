@@ -6,6 +6,8 @@ code and unresolved contracts.
 
 > **Canonical decision:** ADR-007 supersedes the earlier accessory ADRs. Where
 > this historical architecture guide differs from ADR-007, ADR-007 governs.
+> The [implementation contract](asset-control-implementation-contract.md) supplies
+> the 2026-09-17 review amendments and current v1 scope.
 
 ## Physical and software topology
 
@@ -20,7 +22,7 @@ flowchart LR
     Node[ESP32 accessory node]
     PWM[PCA9685, 50 Hz, servos only]
     Shift[74HC595 signal outputs]
-    Servo[SG90/MG90S turnout servo]
+    Servo[SG90 turnout servo]
     Signal[Signal LED and current limiting/driver]
     Supply[12 V 5-10 A accessory supply]
     Buck[Local XL4015 / 5.0 V]
@@ -36,7 +38,7 @@ flowchart LR
     Supply -->|16/18 AWG two-core bus| Buck
     Buck --> Node
     Buck --> PWM
-    Buck --> Shift
+    Node -->|3.3 V logic supply| Shift
     CSB -. electrically separate .- Supply
 ```
 
@@ -85,7 +87,7 @@ after movement; firmware serializes or limits simultaneous movements. Native
 12 V motorized/sound accessories and substantial scenery lighting use separate
 fused and switched branches, even when they share the main accessory supply.
 The detailed load allowances and the separate Axon/Cubietruck computer-power
-domain are specified in ADR-005.
+domain are specified in ADR-007 and its implementation-contract amendment.
 
 Each node configuration records its stable node ID, firmware and configuration
 revision, PCA9685 servo mappings, 74HC595 signal mappings, and health data.

@@ -16,6 +16,8 @@ from proposals still under discussion.
 
 ## Working architecture
 
+- [asset_control implementation contract — 2026-09-17 review](architecture/asset-control-implementation-contract.md)
+
 - [Run, migrate and back up the roster](operations/roster.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)

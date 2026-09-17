@@ -1,5 +1,9 @@
 # asset_control pre-design
 
+> Updated review: the [implementation contract](asset-control-implementation-contract.md)
+> dated 2026-09-17 governs refined execution, provisioning, sequencing and recovery
+> details below. Chemical-plant control is deferred; buffer lights are included.
+
 - **Date:** 2026-09-14
 - **Status:** Review checkpoint; implementation has not started
 - **Service:** `asset_control`, Flask, `0.0.0.0:5302`
@@ -111,7 +115,7 @@ proof that a locomotive moved, a lamp illuminated, or a sound played.
 - machine action: a validated action declared by the specific machine asset, such
   as `operate` for a water tank; turntable actions require a separate concrete
   action set before implementation
-- job state: `queued | dispatched | acknowledged | completed | failed | expired |
+- job state: `queued | dispatched | accepted | started | completed | rejected | failed | expired |
   cancelled | uncertain`
 - node availability: `unknown | online | stale | offline | error`
 
@@ -142,8 +146,9 @@ Those names and columns are proposals, not approved schema. Runtime locks, seria
 objects, MQTT connections, queue objects, and freshness timers remain in memory.
 Do not persist an unbounded serial or MQTT transcript in SQLite.
 
-SQLite coordinates the two services in WAL mode with short transactions and the
-existing busy-timeout conventions. No database transaction remains open while
+SQLite will coordinate the two services in WAL mode with short transactions and
+the existing busy-timeout conventions. WAL must be explicitly enabled and verified
+during implementation; current roster code does not enable it. No transaction remains open while
 waiting for serial, MQTT, or physical motion.
 
 ## Operating eligibility
@@ -173,7 +178,7 @@ Initial eligibility requires:
 - possession `received` and status `active`;
 - a valid `control.node_id` whose node is active;
 - required component connections and values for the requested operation;
-- node availability not offline/error;
+- fresh online node status, verified boot/session identity and installed configuration;
 - the command references the current asset/configuration revision.
 
 An unavailable node does not make the asset record invalid; it makes operation
@@ -223,7 +228,7 @@ sequenceDiagram
     Q->>DB: claim next eligible job
     Q->>MQ: publish versioned command
     MQ->>N: node-specific command
-    N-->>MQ: acknowledged(command_id)
+    N-->>MQ: accepted(command_id), then started
     N->>N: perform output sequence
     N-->>MQ: completed/failed + reported state
     MQ-->>AC: acknowledgement and result
@@ -270,7 +275,7 @@ Node/React production runtime. The first screen has:
 - locomotive, turnout, signal, and machine selectors sourced from SQLite;
 - controls generated only for operations valid for the selected asset;
 - clear distinction between `confirmed`, `accepted_unverified`, `queued`,
-  `acknowledged`, `completed`, `failed`, and `unknown`;
+  `accepted`, `started`, `completed`, `failed`, and `unknown`;
 - disabled controls with a visible reason when asset or device is ineligible;
 - minimum 44 px touch targets and the existing MTOS visual language.
 

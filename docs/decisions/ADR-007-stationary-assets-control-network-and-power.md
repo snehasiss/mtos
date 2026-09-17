@@ -1,5 +1,11 @@
 # ADR-007: Stationary assets, control network, and power management
 
+> Review amendment, 2026-09-17: the
+> [implementation contract](../architecture/asset-control-implementation-contract.md)
+> refines this ADR's execution and recovery rules. Buffer-stop lights are local
+> ESP32-timed 74HC595 outputs; chemical-plant control is deferred. The hardware
+> quantities and budgets below remain provisional until component mapping and measurement.
+
 - Status: Accepted; equipment currents require commissioning measurements
 - Date: 2026-09-07; revised 2026-09-14
 - Supersedes: ADR-004, ADR-005, and ADR-006
@@ -109,12 +115,12 @@ signals.
 
 ### Trackside equipment
 
-Initial power planning includes two assets:
+Initial control planning includes the water tower. The chemical plant is deferred:
 
 | ID | Installation | Electrical treatment |
 | --- | --- | --- |
 | `E001` | Broadway Limited operating water tower | Native 12 V motor/sound equipment; provisional 1 A branch; operate through its supplied control interface or an isolated dry contact |
-| `E002` | Faller chemical plant lighting | Two sets of five warm-white LEDs, ready for 12–16 V AC/DC; provisional 0.2 A total at 12 V |
+| Deferred | Faller chemical plant lighting | Excluded from the initial control scope and revised load subtotal; no E002 assignment is prescribed |
 
 The published water-tower information does not state current. Its complete
 movement-and-sound cycle must be measured before final fuse selection. The
@@ -215,6 +221,7 @@ Example turnout command:
   "sequence": 3,
   "node_id": "N001",
   "boot_id": "a4d31f76",
+  "producer_session_id": "producer-session-example",
   "accessory_id": "T012",
   "desired_state": "diverging",
   "configuration_revision": 12,
@@ -258,7 +265,7 @@ If seven turnouts must change, the producer publishes one command, waits for
 completion, and only then publishes the next. Nodes do not coordinate a
 distributed MQTT lock. Signal LED changes do not consume the servo resource.
 
-For a route, the producer:
+For a future route implementation (outside v1), the producer:
 
 1. commands protecting signals to `stop` and waits for completion;
 2. validates route and interlocking preconditions;
@@ -267,7 +274,9 @@ For a route, the producer:
 5. re-evaluates the route; and
 6. commands the authorized signal to `slow` or `go`.
 
-Initial timeout policy is:
+Historical single-servo timeout proposal is below. Double-slip job deadlines must
+cover both sequential movements and settling; the implementation contract governs
+timeout recovery and forbids releasing actuator capacity while execution is uncertain.
 
 | Stage | Timeout | Action |
 | --- | ---: | --- |
@@ -319,12 +328,13 @@ The initial peak planning calculation is:
 | Twenty simultaneously illuminated 2 mA signal LEDs | 0.2 W |
 | Approximate XL4015 conversion loss | 2.9 W provisional |
 | `E001` water tower provisional allowance | 12.0 W |
-| `E002` chemical-plant lights provisional allowance | 2.4 W |
-| **Calculated peak** | **33.5 W plus measured shift-register logic load** |
-| **Peak with 25% reserve** | **About 42 W / 3.5 A at 12 V; confirm by measurement** |
+| Chemical-plant lighting | Deferred; excluded |
+| Buffer-stop LEDs and aggregate servo idle draw | Add after quantities and measurements |
+| **Revised planning subtotal** | **31.1 W before buffer LEDs, idle draw and measured logic/driver corrections** |
+| **Subtotal with 25% reserve** | **38.9 W before those additions; not a final supply requirement** |
 
-A 12 V, 5 A supply provides 60 W and approximately 18 W of unallocated
-capacity above the current reserved peak. Additional trackside assets trigger
+A 12 V, 5 A supply provides 60 W; available margin must be recalculated after
+the missing loads above are included. Additional trackside assets trigger
 a revised load schedule; the response may be a 12 V, 10 A supply or a separate
 protected power zone.
 
@@ -352,13 +362,14 @@ does not replace a fuse or protect against a shorted cable or failed servo.
 | XL4015 buck converter | 4 | One per node; tested 12 V-to-5 V continuous output |
 | Node input protection | 4 sets | Fuse/PTC, polarity protection, disconnect |
 | Node enclosure or mounting plate | 4 | Serviceable and labelled |
-| SG90 9 g servo | 20 plus spares | Five installed per node |
-| Servo bracket and linkage | 20 sets | Includes 0.8–1.0 mm piano wire |
+| SG90 9 g servo | 20 + number of double-slips, plus spares | Baseline assumes 20 turnout assets; distribute by actual mapping |
+| Servo bracket and linkage | One per servo | Includes 0.8–1.0 mm piano wire |
 | Signal LED aspect circuits | 48 | 24 for 12 two-aspect and 24 for 8 three-aspect signals |
-| 1.5 kΩ LED resistor | 48 | One per 2 V/2 mA aspect; appropriate voltage and power rating |
+| LED resistor | 48 plus buffer LED count | Calculate for actual rail/driver and LED; 1.5 kΩ is only the earlier 5 V/2 V/2 mA example |
+| Buffer-stop red LED | One per SL-40; count pending | One 74HC595 output and resistor each; local 500 ms on/off default |
 | Signal driver channels | 48 | 74HC595 outputs with one resistor per LED; transistor/MOSFET stages where electrically required |
 | Isolated dry-contact interface | At least 1 | Water-tower trigger |
-| Trackside fused branches | 2 initially | One per `E` asset |
+| Trackside fused branches | 1 initially | Water tower; other machine branches deferred |
 | Terminal blocks, connectors, wire, labels | As installed | Sized and polarized for each branch |
 
 The table is a system BOM, not yet a purchase order. Exact fuse ratings,
@@ -376,8 +387,8 @@ follow the completed channel map and commissioning measurements.
 - Direct locomotive operation remains independent of the Wi-Fi accessory path.
 - Four local nodes add firmware, provisioning, security, monitoring, and
   maintenance responsibilities.
-- The initial 60 W accessory supply is sufficient only for the stated two
-  trackside assets; expansion requires recalculation.
+- The initial 60 W accessory supply remains provisional; buffer LEDs, servo idle
+  load and measured device currents must be included before final sizing.
 
 ## Alternatives rejected
 

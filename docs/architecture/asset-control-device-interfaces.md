@@ -1,5 +1,9 @@
 # asset_control device-interface plan
 
+> The [2026-09-17 implementation contract](asset-control-implementation-contract.md)
+> governs execution details: MAIN-scoped power, accepted/started events, producer
+> sessions, configuration provisioning, reservations and buffer-stop indicators.
+
 - **Date:** 2026-09-14
 - **Status:** Proposed contracts for review; no implementation
 
@@ -34,7 +38,7 @@ class DccCommandStation(Protocol):
     def connect(self, selection: SerialSelection | None = None) -> DeviceStatus: ...
     def disconnect(self) -> DeviceStatus: ...
     def status(self) -> DeviceStatus: ...
-    def set_power(self, state: PowerState) -> CommandResult: ...
+    def set_main_power(self, state: PowerState) -> CommandResult: ...
     def set_throttle(
         self, address: int, speed: int, direction: Direction
     ) -> CommandResult: ...
@@ -167,6 +171,7 @@ not enough to claim a component action succeeded.
   "sequence": 3,
   "node_id": "N001",
   "boot_id": "a4d31f76",
+  "producer_session_id": "producer-session-example",
   "accessory_id": "T012",
   "desired_state": "diverging",
   "configuration_revision": 12,
@@ -189,7 +194,8 @@ Acknowledgement means the node validated and accepted ownership of a current job
   "command_id": "019c...",
   "node_id": "N001",
   "boot_id": "a4d31f76",
-  "state": "acknowledged",
+  "producer_session_id": "producer-session-example",
+  "state": "accepted",
   "at": "2026-09-14T00:00:01Z"
 }
 ```
@@ -204,6 +210,7 @@ Completion means firmware finished its configured output sequence:
   "boot_id": "a4d31f76",
   "accessory_id": "T012",
   "state": "completed",
+  "producer_session_id": "producer-session-example",
   "reported_state": "diverging",
   "physical_feedback": false,
   "at": "2026-09-14T00:00:02Z"
@@ -214,7 +221,11 @@ Failures use stable reason codes such as `expired`, `unknown_asset`,
 `configuration_mismatch`, `unsupported_value`, `busy`, `electrical_fault`, or
 `execution_timeout`, plus a bounded human-readable detail.
 
-### Scheduling classes
+### Scheduling classes (future extension)
+
+The initial implementation uses one actuator queue with one active job globally,
+as specified in the implementation contract. The classes below are extension
+concepts, not independently concurrent v1 workers. Buffer flashing stays local.
 
 Initial scheduler classes are concrete rather than generic priorities:
 
@@ -236,6 +247,8 @@ Turnout:
 
 1. Validate one or two servo components and calibrated targets for `straight` or
    `diverging`; a PECO SL-90 double slip uses two coordinated SG90 servos.
+   Execute its servos sequentially under one job reservation; complete only after
+   both finish and use a timeout derived from the complete sequence.
 2. Enable PCA9685 output and move using the node's safe movement profile.
 3. Hold for the configured settling time.
 4. Disable PWM to reduce heating and idle current.

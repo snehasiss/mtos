@@ -810,3 +810,37 @@ After iPhone review, the flexible card space was moved above the classification
 and builder rows so those two rows stay together at the bottom. Only the asset ID
 uses fixed-width text; family and type now use the same normal UI font as the
 prototype builder and model. Desktop card behavior remains consistent.
+
+### 2026-09-17: asset_control design review checkpoint
+
+The controlling refinement is docs/architecture/asset-control-implementation-contract.md.
+It supplements ADR-007, the pre-design and device-interface plan; implementation
+has not started. Scope remains one asset_control service on 0.0.0.0:5302, shared
+SQLite, dedicated EX-CSB1 serial and ESP32/MQTT accessory paths on Cubietruck.
+
+Review decisions: canonical accepted/started/completed node events; MAIN-scoped
+power; separate stop eligibility; emergency-stop generations to reject delayed
+throttle requests; transactional reservations respected by both services for
+control-relevant edits; fresh node readiness and installed configuration; explicit
+producer-session handshake and expiry/deduplication rules. WAL needs enabling in
+implementation, not merely assuming it is already configured.
+
+Double-slips execute two SG90s sequentially within one reserved job. Timeouts
+derive from the whole movement; uncertain execution blocks further actuator
+dispatch until reconciled. Configuration provisioning is explicit while idle.
+Single-owner firmware maintains the 74HC595 output image and non-blocking timers.
+
+Chemical-plant control is deferred. PECO SL-40 buffer stops each have one red LED
+with its own resistor and 74HC595 output; proposed local flash is 500 ms on/off,
+continuing through network/SBC loss while the node functions. No 555 in the
+baseline. Buffer quantity, inventory family/type/prefix and final circuit remain
+open. Signal allocations leave 16 aggregate outputs on eight registers, subject
+to per-node distribution. Power/BOM now account for extra double-slip servos and
+pending buffer/servo-idle loads; 12 V/5 A is still provisional.
+
+Implementation order: complete DCC MAIN/API/mobile increment with fakes first;
+then one complete accessory node/firmware before scaling out; then water tank
+after its trigger is defined. CV/role switching, routes and autonomy stay parked.
+The SVG remains a component overview, with separate MAIN/PROG paths and buffer
+indicators; pin-level assembly details are explicitly pending. Documentation only;
+no device commands, code implementation, commit or push.

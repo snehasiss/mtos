@@ -13,7 +13,7 @@
 
   <rect class="bg" width="1200" height="820"/>
   <text class="label" x="40" y="38">MTOS asset_control — physical and logical connections</text>
-  <text class="small" x="40" y="62">Two independent control points; shared SQLite configuration; common ground only within each accessory node</text>
+  <text class="small" x="40" y="62">Component overview — not a pin-level wiring schematic; shared SQLite configuration; local node grounding</text>
 
   <rect class="group" x="30" y="85" width="1140" height="190" rx="12"/>
   <text class="label" x="50" y="115">Rolling-stock DCC control — synchronous and immediate</text>
@@ -37,8 +37,8 @@
   <text class="tiny" x="298" y="171">USB serial</text>
   <path class="powerwire" d="M595 183 H725"/>
   <text class="tiny" x="627" y="171">DCC output</text>
-  <path class="ground" d="M900 187 H960"/>
-  <text class="tiny" x="902" y="174">future</text>
+  <path class="ground" d="M595 218 H665 V132 H1040 V145"/>
+  <text class="tiny" x="735" y="128">Separate PROG output — future isolated track</text>
 
   <rect class="group" x="30" y="295" width="1140" height="485" rx="12"/>
   <text class="label" x="50" y="327">Stationary-asset control — asynchronous, queued, sequenced</text>
@@ -78,12 +78,12 @@
   <rect class="device" x="700" y="465" width="205" height="98" rx="8"/>
   <text class="label" x="736" y="496">74HC595 chain</text>
   <text class="small" x="722" y="520">signal shift registers</text>
-  <text class="tiny" x="724" y="543">3.3 V · data · clock · latch</text>
+  <text class="tiny" x="724" y="543">3.3 V · data / clock / latch / OE</text>
   <rect class="load" x="980" y="465" width="155" height="98" rx="8"/>
-  <text class="label" x="1008" y="496">Signal LEDs</text>
-  <text class="small" x="998" y="520">one Q per aspect</text>
-  <text class="tiny" x="999" y="543">individual resistor</text>
-  <path class="wire" d="M610 510 H700"/>
+  <text class="label" x="990" y="496">Signals / buffers</text>
+  <text class="small" x="988" y="520">one Q per LED</text>
+  <text class="tiny" x="988" y="543">resistor · local buffer flash</text>
+  <path class="wire" d="M610 435 H625 V510 H700"/>
   <path class="wire" d="M905 513 H980"/>
   <text class="tiny" x="925" y="500">Q0…Q7</text>
 
@@ -95,7 +95,7 @@
   <text class="label" x="1012" y="631">Machine</text>
   <text class="small" x="996" y="655">water tank / future</text>
   <text class="tiny" x="1014" y="678">native supply</text>
-  <path class="wire" d="M610 645 H700"/>
+  <path class="wire" d="M610 445 H620 V645 H700"/>
   <path class="wire" d="M905 649 H980"/>
 
   <path class="powerwire" d="M610 558 H650 V414 H700"/>
@@ -109,4 +109,5 @@
   <path class="ground" d="M390 720 H905"/>
   <path class="ground" d="M500 596 V720 M802 433 V720 M802 563 V720 M802 698 V720"/>
   <text class="tiny" x="520" y="714">common node ground: XL4015 · ESP32 · PCA9685 · 74HC595 · drivers</text>
+  <text class="tiny" x="40" y="802">Assembly details pending: GPIO/pins, OE/reset defaults, decoupling, LED polarity/resistors, connectors and measured branch fuses.</text>
 </svg>
