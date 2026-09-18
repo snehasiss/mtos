@@ -1,9 +1,8 @@
 # MTOS project context
 
-Last updated: 2026-09-13. Checkpoint: asset-manager implementation completed;
-owner reviewing the application on an iPhone. Code baseline: `2ff016b`
-(`build asset manager roster service`). The owner reports pushing it to GitHub.
-This context-file addition is subsequent to that push and is not committed here.
+Last updated: 2026-09-18. Checkpoint: Phase 1 EX-CSB1 MAIN control and its
+React/TypeScript UI implemented locally, awaiting owner review/commit. The owner
+handles commits and pushes.
 
 ## How to use and maintain this file
 
@@ -44,8 +43,8 @@ push without an explicit request. Do not launch delegated agents unless asked.
 
 | Service | Port | Implementation |
 | --- | --- | --- |
-| `asset_manager` | 5301 | Working Flask/Waitress roster UI and JSON API |
-| `asset_control` | 5302 | Reserved launcher only; hardware control is not implemented |
+| `mtos_asset` | 5301 | Working Flask/Waitress roster UI and JSON API; `asset_manager` is a compatibility alias |
+| `asset_control` | 5302 | Phase 1 EX-CSB1 MAIN Flask/Waitress control service and UI |
 
 The asset manager currently provides:
 
@@ -844,3 +843,382 @@ after its trigger is defined. CV/role switching, routes and autonomy stay parked
 The SVG remains a component overview, with separate MAIN/PROG paths and buffer
 indicators; pin-level assembly details are explicitly pending. Documentation only;
 no device commands, code implementation, commit or push.
+
+### Phase sequence and MAIN UI mockup
+
+Owner reordered implementation into three checkpoints: (1) CSB1 MAIN locomotive
+control and UI; (2) PROG CV programming within the same UI; (3) stationary turnout,
+signal and water-tank control, with local buffer indicators. This supersedes the
+earlier accessory-before-CV sequence. Physical PROG commissioning is still pending.
+
+The predecessor React UI and stylesheet were reviewed for visual continuity.
+docs/mockups/asset-control-main.html is an interactive standalone proposal using
+the predecessor's dark-green/amber palette and system font stack. It has mobile
+and desktop layouts, sample roster choices, MAIN power, throttle, direction,
+functions and emergency-stop preview states. It connects to no hardware or API.
+Visual review precedes production implementation; no commit or push was made.
+
+MAIN mockup review: 48 px red triangular emergency button with white exclamation
+mark; Operation/disabled Programming navigation before roster selection; Reverse
+left and Forward right; 16 functions per page with previous/next triangles (last
+page F64–F68). Removed explanatory panel text and moved demo scenarios into
+collapsed settings. Location removed from throttle because inventory location
+is manually maintained and no live block detection exists. Essential disabled
+and emergency messages remain. This is still only the standalone UI mockup.
+
+### CSB1 MAIN low-level design checkpoint
+
+docs/architecture/asset-control-phase-1-low-level-design.md now specifies Phase 1
+file structure, dataclass fields, methods, API bodies, schema-v4 command journal
+and reservations, session/generation rules, thread ownership, bounded serial
+scheduling, eligibility and roster-edit coordination. Includes configuration
+defaults, migration/service integration, separate browser cookie name, compact
+UI state/paging rules and automated/supervised acceptance matrices. Phase 2 PROG
+and Phase 3 accessories are explicit subsequent checkpoints. Tests are specified,
+not yet implemented or executed. No production device code changed.
+
+The mockup was reopened using a version query to bypass stale file-preview cache;
+the app reported the browser-open request queued, so refresh success is not verified.
+
+Latest mock review: function buttons are square with bevels; control and widget
+borders are stronger; mode-tab type is smaller and the tab row can later extend
+to Turnout and Signal. EX-CSB1 is explicitly the sole USB/serial device and owns
+its connection/MAIN-power panel. Future ESP32 views reuse the visual shell but
+show Wi-Fi/MQTT node status instead. The 48 px emergency triangle has rounded
+corners, a red outer outline, white separation and red inner face.
+
+### 2026-09-17: Phase 1 CSB1 MAIN implementation
+
+Phase 1 production code is now present. `asset_control` runs through Flask and
+Waitress on 0.0.0.0:5302 using `tools/asset_control`. Startup is de-energized:
+it opens no serial port and reports disconnected/MAIN unknown until the operator
+selects and connects a candidate USB serial device. The live process was started
+as PID 1754 for owner review; its health and control-state endpoints responded.
+No serial candidate was opened and no hardware command was sent.
+
+Implementation lives under `src/mtos/control`, `control_app.py`, control.html,
+control.css and control.js. It provides DCC-EX framing/validation/parsing, filtered
+USB serial discovery, verified identity/TrackManager handshake, continuous reader,
+independent emergency write path, MAIN-scoped power, roster-driven throttle and
+F0–F68 functions, stop/emergency generation handling and explicit resume. The UI
+uses the reviewed compact mobile design and shared asset data; Programming remains
+disabled for Phase 2.
+
+Schema v4 adds bounded command-journal/reservation foundations and enables WAL.
+Asset-manager writes reject control-relevant changes to reserved assets while
+allowing descriptive edits. Dependencies now include pyserial 3.5; it was installed
+in the iMac development venv and loaded successfully. Cubietruck may install the
+same requirements into system Python without a venv.
+
+Automated tests use fake serial hardware and temporary databases. They cover
+protocol framing/validation, identity/output handshake, scoped power, throttle,
+emergency, reservation/edit protection, API/CSRF, schema v4 and WAL. The complete
+suite now passes 68 tests with one optional browser test skipped. Compilation and
+whitespace checks pass. Real CSB1 MAIN commissioning is still pending and must be
+supervised. No commit or push was made.
+
+The connected USB serial adapter appeared as `/dev/cu.usbserial-1440` (VID 6790,
+PID 29987). A UI connection attempt in the Codex-launched process failed with OS
+permission error before the port opened; therefore no identity query, power,
+throttle or other DCC frame was sent. The runtime displayed this error safely.
+Codex could not restart PID 1754 because the process sandbox denied SIGTERM. That
+process still serves health on 5302 but predates the final continuous-reader and
+USB-filter refinements. Owner must run `tools/asset_control restart` in Terminal
+before commissioning/review. The new process will show only likely USB devices.
+
+### 2026-09-17: Phase 1 mobile control refinement
+
+The production control UI now uses themed in-page listboxes for both EX-CSB1
+device and active-locomotive selection instead of native iOS select controls.
+The roster endpoint intentionally returns only received, active locomotives with
+valid DCC configuration. The redundant Throttle-side MAIN label and routine
+connection/power instruction text were removed; disabled controls still show
+availability, while emergency-latch guidance remains visible.
+
+Function pages use 4-by-4 keyboard layouts with spaced, bevelled square keys.
+The polling renderer preserves each key DOM element so an iPhone touch cannot be
+interrupted by the one-second refresh; a press updates immediately and is then
+reconciled with the API result. DCC-EX locomotive reports expose only F0–F15, so
+the device snapshot now stores reported functions separately from the last
+successfully transmitted desired F0–F68 state. Key highlight represents that
+commanded state and no longer disappears on pages F16 onward. Mobile padding,
+panel gaps, throttle sizing and empty-error space were reduced so Active
+locomotive, Throttle and Functions fit more compactly. After review the function
+pad returned to a more realistic 4-by-4 arrangement; further widget regrouping
+and one-viewport optimization are deliberately deferred until Programming,
+Signal, Turnout and Trackside views exist.
+
+The keyboard presentation was subsequently copied from the working predecessor
+`union-pacific-layout/src/csb1/frontend`: four columns, 7 px gaps, 56 px minimum
+key height, dark key faces, amber active state, prominent function number and a
+smaller Headlight/Bell/Horn/Sound label. MTOS retains its five-page F0–F68
+navigation and persistent-key touch fix.
+
+Live iPhone review then exposed poor acknowledgement during device operations.
+The Waitress log showed requests queuing while Connect/Power/Disconnect calls
+were in flight and browser polling continued. The UI now acknowledges touches
+immediately with Connecting, Disconnecting, Powering ON or Powering OFF states,
+suspends polling during the lifecycle request, prevents conflicting presses and
+does not erase errors on the next poll. Function keys change color immediately,
+remain fully visible while pending, reject duplicate touches, and reconcile or
+roll back after the API result. Their increased-padding shape is enforced as a
+perfect square while retaining the predecessor bevel and two-line labels.
+
+### 2026-09-18: asset_control React migration
+
+The asset_control UI was migrated from a Flask template plus imperative JavaScript
+to React 19, TypeScript 7 and Vite 8, following the proven predecessor structure.
+Source lives in `frontend/asset_control`; Vite emits the committed production
+bundle into `src/mtos/control_ui`. Flask serves the hashed bundle and retains all
+device, roster, CSRF and control APIs. The Cubietruck runs only Flask/Waitress and
+does not require a Node process. Node.js and pnpm are build-time dependencies.
+
+The React state model owns lifecycle feedback, polling, selected locomotive,
+throttle debounce, direction, five F0–F68 pages, optimistic function state and
+rollback. Polling pauses for device/power and function operations so an old
+snapshot cannot erase touch feedback. The UI retains the reviewed theme, custom
+device/roster listboxes, emergency stop, 4-by-4 square function keyboard and the
+disabled Programming checkpoint. `tools/build_asset_control_ui` installs the
+locked dependencies and rebuilds the production assets. The legacy
+`templates/control.html`, `static/control.js` and `static/control.css` were
+removed.
+
+### 2026-09-18: real-time control architecture redesign
+
+`docs/architecture/control-service-architecture.md` supersedes the temporary
+HTTP-polling UI topology. React will use Socket.IO/WebSocket for acknowledged
+commands, snapshots and pushed CSB1 events. HTTP remains for health, static
+assets and diagnostic compatibility. Waitress cannot remain the asset_control
+server after implementation; a supported WebSocket-capable single-worker runtime
+must be selected and tested.
+
+The first redesign identified asset management, human interface, operational
+Core, CSB1 control and ESP32 control boundaries. The accepted ADR subsequently
+formalized six independently supervised services by adding the optional
+`mtos_ai` producer: `mtos_asset`, `mtos_hmi`, `mtos_core`, `mtos_dcc`,
+`mtos_mc` and `mtos_ai`; Mosquitto remains separate.
+
+The asset interface is the sole command authority: it maps asset IDs, validates
+configuration, arbitrates producers, reserves resources and later enforces
+occupancy/interlocking. Human UI, schedules and Axon-hosted SLM autonomy are
+command producers. SLM may bypass the human interface but never this deterministic
+safety boundary or typed hardware adapters. MQTT is only between the ESP32
+control adapter and nodes; browsers never publish directly. This checkpoint is
+documentation only; WebSocket implementation and hardware commissioning remain
+next work.
+
+Owner accepted the separated-service direction and named the services:
+`mtos_asset`, `mtos_hmi`, `mtos_core`, `mtos_dcc`, `mtos_mc` and
+`mtos_ai`. Core is the central nervous system and sole operational authority;
+DCC and MC are hardware-abstraction services. Asset and HMI bind to the trusted
+LAN on ports 5301 and 5302. Core, DCC and MC default to loopback ports 5303,
+5304 and 5305; co-hosted AI uses 5306. A future AI running on another Axon must
+use an authenticated allowlisted ingress or secure tunnel, not public exposure
+of all Core interfaces. The services remain in one monorepo with shared typed
+protocol packages but independently supervised processes and explicit data
+ownership.
+
+ADR-009, `docs/decisions/ADR-009-service-decomposition-and-control-architecture.md`,
+formally records this decision. It covers authority, endpoints, WebSocket HMI,
+DCC and microcontroller abstraction, MQTT scope, AI restrictions, data ownership,
+supervision, alternatives, consequences and migration order. The existing
+`docs/architecture/control-service-architecture.md` is its detailed companion.
+
+### 2026-09-18: independent design review incorporated
+
+The review in `docs/mtos-review-design-2026-09-18.md` supports the six-service
+boundary but identified four contracts that could not remain implicit. ADR-009
+now specifies an Asset-owned multi-asset lease with monotonic fencing tokens,
+10-second renewal and 30-second expiry; expired leases require reconciliation
+before protected edits. DCC and MC reject stale Core sessions/tokens.
+
+Core heartbeats adapters every two seconds and is stale after six. On Core loss,
+DCC rejects normal commands, removes unsent motion and attempts one DCC-EX
+all-stop without claiming that power was removed; MC starts no new jobs. HMI has
+an authenticated emergency-stop-only bypass to DCC, while physical power removal
+remains mandatory for host/link failure. Core owns the canonical operational
+command; MC owns a durable execution ledger and deduplication evidence. Lost
+acknowledgements are queried and reconciled, never blindly replayed.
+
+ADR-009 also fixes Version 1 limits for browser sessions, unacknowledged commands,
+WebSocket messages/backlogs, Core/DCC/MC queues, MQTT inflight messages, replay
+windows and terminal history. Pending/uncertain records are never pruned to meet
+those limits. Its platform section treats a 2 GiB non-AI host as plausible but
+unverified, gives per-process planning ranges, and requires representative soak
+measurement before declaring hardware supported. AI has a separate resource
+budget.
+
+ADR-008 and roster operations now bound media processing to 20 MiB compressed,
+25 million decoded pixels, one optimizer and a four-request queue. Bulk import is
+a maintenance operation, not a live-operation workload. These are design
+requirements for later enforcement; this documentation checkpoint did not alter
+the current optimizer implementation.
+
+The pre-design, device-interface, implementation-contract, Phase 1 low-level and
+predecessor-review documents are explicitly marked historical where ADR-009
+supersedes their monolithic process, shared-database and polling assumptions.
+Device protocol evidence and acceptance scenarios remain useful. The companion
+architecture diagram now shows separate Asset-owned and Core-owned persistence.
+
+### 2026-09-18: mtos_asset module checkpoint
+
+The first service-boundary implementation establishes `mtos_asset` as the
+canonical name for the existing electronic/virtual asset environment on port
+5301. `src/mtos/asset_app.py` is its explicit application entry point and
+`tools/mtos_asset` is the canonical start/stop/restart/status launcher.
+`tools/asset_manager` remains a compatibility alias. Service lifecycle code
+canonicalizes both spellings to the same `mtos_asset` lock, PID metadata and log,
+preventing two aliases from launching duplicate processes. `/health` reports
+`service: mtos_asset`.
+
+The accepted roster domain, SQLite data, JSON APIs and iPhone-first UI were
+preserved without redesign. This service imports no DCC or microcontroller
+adapter and performs no device operation. The existing control configuration in
+an asset remains descriptive inventory data.
+
+ADR-008 image resource controls are now implemented: input is limited to 20 MiB
+and 25 million decoded pixels, only one optimization runs at a time, and at most
+four requests may wait. Excess concurrency receives a retryable busy error rather
+than growing memory without bound. Directory imports use the same optimizer.
+
+Focused Asset/domain/UI tests pass 65 with one optional environment test skipped.
+The complete repository suite passes 71 with that same single skip. Python
+compilation, launcher status smoke test and `git diff --check` also pass. The
+roster UI was intentionally retained without visual changes because it had
+already been accepted. No service was left running, and no commit or push was
+performed.
+
+### 2026-09-18: mtos_dcc and mtos_core module checkpoints
+
+`mtos_dcc` is implemented as a loopback-only service on port 5304 with
+`tools/mtos_dcc`. It exclusively owns serial discovery and the existing tested
+DCC-EX station adapter. Its API is address-level and roster-independent. A fenced
+Core session, six-second heartbeat watchdog, per-asset fencing tokens, 64-command
+normal admission bound and emergency bypass enforce the ADR-009 boundary. Core
+loss causes one best-effort DCC-EX all-stop when the station remains ready.
+
+`mtos_core` is implemented on loopback port 5303 with `tools/mtos_core`. It owns
+`data/db/core.sqlite3`, its command journal and reservation projection. It
+validates locomotive eligibility through an Asset client contract, requests an
+Asset lease, passes revision/lease/fence evidence to DCC, records uncertain
+failures and deduplicates repeated command IDs before acquiring another lease or
+touching hardware. Emergency stop is latched until explicit resume. A background
+two-second heartbeat maintains the DCC session and affects Core readiness.
+
+Both internal APIs require `X-MTOS-Internal-Token`; launchers bind them to
+127.0.0.1 by default. Tests use fake Asset and DCC contracts. The real Asset lease
+endpoint, HMI migration and end-to-end process wiring are deliberately deferred
+to the integration checkpoint. No real CSB1 command was sent.
+
+Focused DCC/Core/legacy-control/launcher tests pass 19. The complete repository
+suite passes 77 with one optional browser-environment test skipped. Compilation
+and `git diff --check` pass. Both services were smoke-started against a temporary
+data root, returned correct health identities on 127.0.0.1:5304 and :5303, and
+were stopped cleanly. No hardware was opened, and no commit or push was made.
+
+### 2026-09-18: mtos_hmi module checkpoint
+
+`mtos_hmi` is implemented as the LAN-facing service on port 5302 with
+`tools/mtos_hmi`. `tools/asset_control` now canonicalizes to the same `mtos_hmi`
+process, lock and PID metadata. HMI serves the accepted React/TypeScript control
+interface but owns no roster database, serial object or MQTT client.
+
+The browser adapter now uses `socket.io-client`; the one-second HTTP polling loop
+was removed. Connection produces a full snapshot. Commands carry a generated
+command ID, increasing client sequence, typed operation and payload. Socket
+acknowledgement represents HMI acceptance only; background execution later emits
+accepted/completed/failed events and a new snapshot. The server enforces eight
+browser sessions, 32 outstanding commands per browser, 16 KiB commands, a 64 KiB
+transport limit and a 1,024-event bounded history.
+
+Flask-SocketIO and simple-websocket are runtime dependencies. The React production
+bundle was rebuilt with socket.io-client. Focused HMI/service/legacy-control tests
+pass 19; the full suite passes 81 with one optional browser-environment skip.
+TypeScript compilation, Vite production build, Python compilation and whitespace
+checks pass. A temporary loopback smoke service returned `mtos_hmi` health and
+the React shell, then stopped cleanly.
+
+The Core HMI projection endpoints remain the explicit integration contract, so
+operational readiness requires the next integration checkpoint. No hardware was
+opened, no DCC command was sent, and no commit or push was performed.
+
+### 2026-09-18: Phase 1 service integration checkpoint
+
+The DCC MAIN path is now integrated across `mtos_asset`, `mtos_dcc`, `mtos_core`
+and `mtos_hmi`. Asset schema version 5 adds Asset-owned control leases and
+per-asset fencing counters. Internal lease acquisition validates revisions and
+conflicts atomically. A durable Core epoch lets a newly started Core session
+supersede its own stale lease while issuing a higher asset fence; older or equal
+epochs cannot take over it. Protected Asset edits are blocked by held or
+unreconciled leases.
+
+Core now exposes the HMI snapshot, active-locomotive roster, serial-device list
+and typed command gateway. HMI monitors the loopback Core projection and pushes
+only changed snapshots through Socket.IO, so the browser no longer polls. Device
+connect/disconnect, identity, MAIN state, command outcomes and failures follow
+the DCC-to-Core-to-HMI feedback path. While EX-CSB1 is disconnected, connection
+is `disconnected` and MAIN power is truthfully `unknown`; startup never opens a
+serial device, energizes track power or restores previous throttle state.
+
+`tools/mtos_services` is the normal coordinator. It selects the project virtual
+environment when present and otherwise the invoking system Python. Startup is
+Asset, DCC, Core, fenced Core/DCC initialization, then HMI. A failure unwinds
+the processes already started. Shutdown is HMI, Core, DCC, then Asset. Asset and
+HMI bind to the trusted LAN on ports 5301 and 5302; Core and DCC stay on loopback
+ports 5303 and 5304. The exact procedure and failure behavior are recorded in
+`docs/operations/service-startup.md`.
+
+The HMI is the intended common human console for locomotive and stationary-asset
+operations, but this checkpoint implements DCC MAIN only. CV/PROG is Phase 2.
+Turnout, signal and machine controls remain Phase 3 and require `mtos_mc`; no MC
+operation is simulated or routed through DCC.
+
+The full suite passes 83 tests with one optional environment test skipped.
+Python compilation and whitespace validation pass. A real four-process smoke
+test used an isolated temporary data root, verified health on ports 5301–5304,
+observed the initial disconnected/power-unknown HMI Socket.IO snapshot, then
+verified reverse-order shutdown and closed ports. No serial device was opened,
+no hardware command was sent, and no commit or push was performed.
+
+### 2026-09-18: mtos_mc design checkpoint
+
+The microcontroller boundary is finalized in
+`docs/architecture/mtos-mc-module.md`; implementation has not started. `mtos_mc`
+will listen only on `127.0.0.1:5305`, own MQTT/node sessions and a separate
+`data/db/mc.sqlite3` execution ledger, and accept only fenced typed operations
+from Core. Its public operational vocabulary is `turnout.set`, `signal.set` and
+`machine.execute`. Raw MQTT topics, GPIO/channel numbers, PWM values and arbitrary
+pulse timing never cross the Core/HMI boundary.
+
+Turnout states remain `straight | diverging`; signals use the aspects allowed by
+their type; machine actions must be declared by installed asset configuration.
+The first machine is the water tank with action `operate`, gated on measurement
+of its control interface and timing. Turntable positioning and chemical-plant
+control remain deferred. Buffer-stop LEDs remain autonomous node-local flashing
+indicators, not operator signal commands.
+
+The specific water tank is Broadway Limited Imports 7924, Operating Water Tower
+with Sound, UP, Weathered, HO. It uses a fused native 12 V accessory-bus tap before
+the XL4015. MTOS omits the suggested DCC accessory decoder. The factory pushbutton
+is preserved, with an isolated normally-open relay contact wired in parallel.
+ESP32 firmware generates a bounded contact-closure pulse through a transistor/
+MOSFET relay driver with required coil suppression; it never drives the factory
+switch leads directly. Pulse duration, cycle busy window, trigger voltage/current,
+polarity sensitivity, 12 V current, relay rating and final fuse require measurement.
+
+One global servo permit covers all nodes and PCA9685 boards. An ordinary turnout
+holds it for one SG90 sequence; a double slip holds it while both SG90s move
+sequentially. Any future machine declaring a servo also consumes this permit.
+Loss of evidence after dispatch produces `uncertain` and blocks all later servo
+movement until node evidence or supervised reconciliation releases the permit.
+Signals do not consume the servo permit, but share one serialized output-image
+writer per node; Version 1 permits one global non-servo machine job.
+
+MQTT Version 1 uses per-node command/event/availability/status topics, QoS 1,
+non-retained commands, retained online/LWT and status, unique credentials and
+topic ACLs. Node readiness requires fresh presence, boot ID, matching installed
+revision, compatible firmware and a current producer-session handshake. QoS
+PUBACK is never treated as physical completion. MC performs durable idempotency,
+bounded evidence retention and restart reconciliation without blindly replaying
+physical actions. Core state and results flow to the existing HMI Socket.IO
+snapshot; HMI never connects to MQTT directly.

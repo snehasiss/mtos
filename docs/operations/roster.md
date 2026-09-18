@@ -1,4 +1,4 @@
-# Running asset_manager
+# Running mtos_asset
 
 Requires Python 3.11+ on macOS or Linux. Runtime dependencies are Flask, Waitress
 and Pillow; SQLite is the Python standard-library `sqlite3` module. On older ARM
@@ -7,10 +7,10 @@ systems Pillow may require the OS JPEG/zlib development packages to build.
 ```bash
 python3 -m pip install -r requirements.txt
 python3 -m pip install -e .
-tools/asset_manager start
-tools/asset_manager status
-tools/asset_manager restart
-tools/asset_manager stop
+tools/mtos_asset start
+tools/mtos_asset status
+tools/mtos_asset restart
+tools/mtos_asset stop
 ```
 
 `requirements.txt` lists the current runtime dependencies and matches
@@ -18,6 +18,12 @@ tools/asset_manager stop
 Jinja2. SQLite (`sqlite3`) and JSON are supplied by Python; do not install
 similarly named pip packages. The editable project install registers MTOS and its
 `mtos_backup` command. For tests, additionally install `-e '.[dev]'` (pytest).
+
+Image uploads/imports are limited to 20 MiB compressed input and 25,000,000
+decoded pixels. Optimization is serialized with a bounded four-request waiting
+queue to prevent several decoded images exhausting a small host.
+Treat bulk directory import as a maintenance task; do not run it during live
+railroad operation. ADR-008 defines this constrained-host requirement.
 
 Cubietruck3 A20 deployment uses system Python, without a virtual environment.
 Install dependencies on the SBC itself; do not copy iMac compiled packages.
@@ -33,17 +39,17 @@ After installation, verify:
 
 ```bash
 python3 -m pip check
-python3 -c 'import sqlite3, json, PIL, flask, waitress; print("MTOS dependencies OK")'
+python3 -c 'import sqlite3, json, PIL, flask, waitress, serial; print("MTOS dependencies OK")'
 ```
 
 These version ranges are not a platform-tested lockfile. The current application
-has not yet been commissioned on the A20. Serial/MQTT packages are not included
-because asset_control is not implemented; add them when that code is introduced.
+has not yet been commissioned on the A20. PySerial is included for Phase 1 CSB1
+control; MQTT dependencies are deferred to the accessory checkpoint.
 
 Default bind: `0.0.0.0:5301` (all IPv4 interfaces). For an iPhone on the same trusted LAN:
 
 ```bash
-tools/asset_manager start
+tools/mtos_asset start
 ```
 
 Open `http://<SBC-or-iMac-IP>:5301` on the phone. This release has no user-account
@@ -53,12 +59,14 @@ is off. PID state and logs are under `data/run/`. Start and restart default to
 `0.0.0.0`; pass `--host 127.0.0.1` each time for local-only access. The port is
 fixed at 5301. Run service commands as the same OS
 user. Graceful stop waits for exit and never force-kills an unrelated process.
+`tools/asset_manager` is retained as a compatibility alias; both names use the
+same `mtos_asset` lock, PID metadata and process, so they cannot start duplicates.
 
 ## Data and migration
 
 `data/db/mtos.sqlite3` and `data/media/<family>/<asset_id>_n.jpg` are ignored by
 Git. `MTOS_DATA_DIR=/path/to/data` configures another root for service and utilities.
-Schema version 3 is initialized/upgraded automatically; SQL is in `src/mtos/migrations`.
+Schema version 5 is initialized/upgraded automatically; SQL is in `src/mtos/migrations`.
 On first startup after the family-folder change, registered legacy files under
 `media/<asset_id>/` are moved to `media/<family>/`. Checksums and conflicting
 destinations are validated before any old file is removed. Restart the running
@@ -101,9 +109,10 @@ source, price and legacy acquired date remain accessible in the roster.
 The initial migration imported 159 assets and 110 optimized photos. Reimport
 preserves subsequent edits and fresh migration applies the confirmed corrections.
 
-`tools/asset_control (start|stop|restart|status)` reserves port 5302. Start and
-restart report that the future control service is not implemented and return
-nonzero; they do not launch a placeholder hardware controller.
+`tools/mtos_hmi (start|stop|restart|status)` operates the browser-facing HMI on
+`0.0.0.0:5302`; `tools/asset_control` is a compatibility alias for that same
+process. HMI opens no serial hardware and uses Socket.IO to submit typed intent to
+Core. Stop Asset and control services before restore or upgrade operations.
 
 ## Manual backups and restoration
 
@@ -122,9 +131,9 @@ for all MTOS writes; external direct filesystem/database edits bypass that lock.
 
 ```bash
 tools/mtos_backup --remote ~/gdrive/backup/mtos/data --verify
-tools/asset_manager stop
+tools/mtos_asset stop
 tools/mtos_backup --remote ~/gdrive/backup/mtos/data --restore
-tools/asset_manager start
+tools/mtos_asset start
 ```
 
 Restore chooses the newest completed snapshot from the supplied directory (or an

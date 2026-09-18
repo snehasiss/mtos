@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Start, stop, restart or inspect the integrated MTOS service stack."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SERVICES = ("mtos_asset", "mtos_dcc", "mtos_core", "mtos_hmi")
+PROJECT_PYTHON = ROOT / ".venv" / "bin" / "python3"
+PYTHON = str(PROJECT_PYTHON) if PROJECT_PYTHON.is_file() else sys.executable
+
+
+def run_service(service, action):
+    return subprocess.run(
+        [PYTHON, str(ROOT / "tools/service.py"), "--service", service, action],
+        cwd=ROOT, env=os.environ.copy(), check=False,
+    ).returncode
+
+
+def initialize_core():
+    token = os.environ.get("MTOS_INTERNAL_TOKEN", "development-only")
+    request = urllib.request.Request(
+        "http://127.0.0.1:5303/v1/start", data=b"{}", method="POST",
+        headers={"Content-Type": "application/json", "X-MTOS-Internal-Token": token},
+    )
+    with urllib.request.urlopen(request, timeout=3) as response:
+        result = json.load(response)
+    if not result.get("started") or not result.get("dcc_ready"):
+        raise RuntimeError("Core did not establish its DCC session")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("start", "stop", "restart", "status"))
+    args = parser.parse_args()
+    if args.action == "status":
+        return max(run_service(service, "status") for service in SERVICES)
+    if args.action in ("stop", "restart"):
+        result = max(run_service(service, "stop") for service in reversed(SERVICES))
+        if args.action == "stop":
+            return result
+    started = []
+    try:
+        for service in SERVICES[:-1]:
+            if run_service(service, "start"):
+                raise RuntimeError(f"Unable to start {service}")
+            started.append(service)
+        initialize_core()
+        if run_service("mtos_hmi", "start"):
+            raise RuntimeError("Unable to start mtos_hmi")
+        started.append("mtos_hmi")
+        print("MTOS ready: Asset 5301, HMI 5302, Core 5303, DCC 5304")
+        return 0
+    except Exception:
+        for service in reversed(started):
+            run_service(service, "stop")
+        raise
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

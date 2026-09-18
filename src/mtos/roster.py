@@ -8,8 +8,9 @@ import json
 import os
 import shutil
 import sqlite3
+import uuid
 from contextlib import contextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from .assets.model import (
@@ -188,9 +189,80 @@ class Roster:
                 ).read_text()
                 db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
                 version = 3
-            if version != 3:
+            if version == 3:
+                sql = (Path(__file__).parent / "migrations/004_control.sql").read_text()
+                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+                version = 4
+            if version == 4:
+                sql = (Path(__file__).parent / "migrations/005_asset_leases.sql").read_text()
+                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+                version = 5
+            if version != 5:
                 raise ValueError(f"Unsupported database schema: {version}")
+            db.execute("PRAGMA journal_mode=WAL")
             self._migrate_media_layout(db)
+
+    def acquire_leases(self, asset_ids, expected_revisions, core_session_id, core_epoch, purpose, duration_seconds=30):
+        if not asset_ids or not all(isinstance(value, str) for value in asset_ids):
+            raise ValueError("asset_ids must be a non-empty string list")
+        if asset_ids != sorted(set(asset_ids)):
+            raise ValueError("asset_ids must be unique and sorted")
+        if not core_session_id or type(core_epoch) is not int or core_epoch < 1 or not purpose:
+            raise ValueError("core_session_id, positive core_epoch and purpose required")
+        if type(duration_seconds) is not int or not 5 <= duration_seconds <= 60:
+            raise ValueError("duration_seconds must be 5..60")
+        stamp = datetime.now(UTC)
+        expires = (stamp + timedelta(seconds=duration_seconds)).isoformat()
+        leases = []
+        with self.transaction() as db:
+            for asset_id in asset_ids:
+                row = db.execute("SELECT revision FROM asset WHERE id=?", (asset_id,)).fetchone()
+                if row is None:
+                    raise KeyError(asset_id)
+                expected = expected_revisions.get(asset_id)
+                if type(expected) is not int or row["revision"] != expected:
+                    raise Conflict(f"Asset revision changed: {asset_id}")
+                current = db.execute("SELECT * FROM asset_lease WHERE asset_id=?", (asset_id,)).fetchone()
+                if current and current["state"] == "held" and current["expires_at"] <= stamp.isoformat():
+                    db.execute(
+                        "UPDATE asset_lease SET state='expired_pending_reconciliation',updated_at=? WHERE asset_id=?",
+                        (stamp.isoformat(), asset_id),
+                    )
+                    current = db.execute("SELECT * FROM asset_lease WHERE asset_id=?", (asset_id,)).fetchone()
+                if current and current["state"] == "expired_pending_reconciliation":
+                    raise Conflict(f"Asset lease requires reconciliation: {asset_id}")
+                supersede = current and current["core_session_id"] != core_session_id
+                if supersede and core_epoch <= current["core_epoch"]:
+                    raise Conflict(f"Asset is leased by another Core session: {asset_id}")
+                if current and not supersede:
+                    db.execute(
+                        "UPDATE asset_lease SET purpose=?,expires_at=?,updated_at=? WHERE asset_id=?",
+                        (purpose, expires, stamp.isoformat(), asset_id),
+                    )
+                    lease_id, token = current["lease_id"], current["fencing_token"]
+                else:
+                    fence = db.execute("SELECT token FROM asset_fence WHERE asset_id=?", (asset_id,)).fetchone()
+                    token = (fence["token"] if fence else 0) + 1
+                    db.execute(
+                        "INSERT INTO asset_fence(asset_id,token) VALUES(?,?) "
+                        "ON CONFLICT(asset_id) DO UPDATE SET token=excluded.token",
+                        (asset_id, token),
+                    )
+                    lease_id = str(uuid.uuid4())
+                    db.execute(
+                        "INSERT INTO asset_lease VALUES(?,?,?,?,?,?,?,?,?,?,?) "
+                        "ON CONFLICT(asset_id) DO UPDATE SET lease_id=excluded.lease_id,"
+                        "fencing_token=excluded.fencing_token,asset_revision=excluded.asset_revision,"
+                        "core_session_id=excluded.core_session_id,core_epoch=excluded.core_epoch,"
+                        "purpose=excluded.purpose,state='held',expires_at=excluded.expires_at,"
+                        "created_at=excluded.created_at,updated_at=excluded.updated_at",
+                        (asset_id, lease_id, token, expected, core_session_id, core_epoch,
+                         purpose, "held", expires, stamp.isoformat(), stamp.isoformat()),
+                    )
+                leases.append({"asset_id": asset_id, "lease_id": lease_id,
+                               "fencing_token": token, "asset_revision": expected,
+                               "expires_at": expires})
+        return leases
 
     def _migrate_media_layout(self, db):
         """Move legacy media/<asset_id>/ files into media/<family>/ safely."""
@@ -361,6 +433,22 @@ class Roster:
                     raise Conflict("Asset ID already exists")
             item = validate(merged)
             aid = item["id"]
+            if asset_id and (
+                db.execute("SELECT 1 FROM control_reservation WHERE asset_id=?", (aid,)).fetchone()
+                or db.execute("SELECT 1 FROM asset_lease WHERE asset_id=?", (aid,)).fetchone()
+            ):
+                protected = lambda value: {
+                    "family": value.get("family"),
+                    "type": value.get("type"),
+                    "control": value.get("control"),
+                    "relations": value.get("relations", []),
+                    "lifecycle": {
+                        key: value.get("lifecycle", {}).get(key)
+                        for key in ("possession", "status", "location")
+                    },
+                }
+                if protected(old) != protected(item):
+                    raise Conflict("Asset control configuration is reserved for operation")
             timestamp = now()
             if asset_id:
                 db.execute(

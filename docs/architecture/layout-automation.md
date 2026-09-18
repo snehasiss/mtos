@@ -8,6 +8,10 @@ code and unresolved contracts.
 > this historical architecture guide differs from ADR-007, ADR-007 governs.
 > The [implementation contract](asset-control-implementation-contract.md) supplies
 > the 2026-09-17 review amendments and current v1 scope.
+> ADR-009 subsequently supersedes this guide's software-process topology and
+> shared-persistence implication. Its physical ESP32/PCA9685/74HC595/XL4015
+> design remains applicable; `mtos_core`, `mtos_dcc` and `mtos_mc` now have
+> separate ownership and persistence contracts.
 
 ## Physical and software topology
 

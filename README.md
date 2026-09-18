@@ -26,19 +26,20 @@ domain rather than assumptions embedded in it.
 
 ## Status
 
-The asset-management application runs on Python, Flask and SQLite with an
-iPhone-first browser interface. Add, search and update rolling or stationary
-assets; manage lifecycle, consists, and photos. Layout operation will follow.
+The asset-management application and the Phase 1 DCC control path run on Python,
+Flask and SQLite with iPhone-first browser interfaces. `mtos_hmi`, `mtos_core`
+and `mtos_dcc` are integrated; real EX-CSB1 commissioning and the future
+`mtos_mc` accessory service remain pending.
 
-## Run the roster
+## Run mtos_asset
 
 ```bash
 python3 -m pip install -r requirements.txt
 python3 -m pip install -e .
-tools/asset_manager start
+tools/mtos_asset start
 ```
 
-Open `http://127.0.0.1:5301`. Use `tools/asset_manager restart`, `stop`, or `status` to
+Open `http://127.0.0.1:5301`. Use `tools/mtos_asset restart`, `stop`, or `status` to
 manage the service. It binds to `0.0.0.0` by default. For a phone on a trusted LAN,
 open the host's LAN IP address on port 5301. Use `--host 127.0.0.1` explicitly
 for local-only access. This release has no account authentication.
@@ -55,11 +56,48 @@ python3 tools/import_image.py --source ~/Pictures/train-photos/
 See [the roster guide](docs/operations/roster.md) for migration, configuration,
 backup verification, restore, and JSON endpoints.
 
-The service is named `asset_manager` (port 5301). The future DCC/electronics
-service is `asset_control` (port 5302); its launcher reserves the interface and
-reports that control functionality is not implemented yet.
+The asset service is `mtos_asset` on port 5301. `tools/asset_manager` remains a
+compatibility alias and addresses the same process. The browser service is
+`mtos_hmi` on port 5302:
+
+```bash
+tools/mtos_services start
+```
+
+Open `http://<SBC-or-iMac-IP>:5302`. The service starts disconnected and never
+energizes track power automatically. Select the EX-CSB1 USB serial device, connect,
+verify readiness, then explicitly enable MAIN power. Stop/restart/status use the
+same launcher syntax. Use this only on a trusted local network.
+
+`tools/asset_control` remains a compatibility alias for `mtos_hmi`. The browser
+is written in React and TypeScript and compiled by Vite.
+Flask serves the committed production bundle, so Node.js is not required on the
+Cubietruck at runtime. Frontend developers need Node.js and pnpm; after changing
+`frontend/asset_control/`, rebuild the bundle with:
+
+```bash
+tools/build_asset_control_ui
+```
+
+The generated files under `src/mtos/control_ui/` are part of the application and
+must be updated together with their React source.
 
 Current design material is under [`docs/`](docs/README.md).
+
+The stack coordinator starts Asset, DCC and Core, establishes the fenced
+Core–DCC session, and starts HMI only after Core is ready. It stops them in the
+reverse order:
+
+```bash
+tools/mtos_services status
+tools/mtos_services restart
+tools/mtos_services stop
+```
+
+Asset and HMI listen on the trusted LAN. Core and DCC remain loopback-only on
+ports 5303 and 5304. HMI uses Socket.IO and calls Core only; Core validates
+Asset data and is the sole service allowed to command DCC. See the
+[startup and shutdown guide](docs/operations/service-startup.md).
 
 For development/tests, install `python3 -m pip install -e '.[dev]'` as well.
 Cubietruck deployment uses system Python 3.11 or newer, without `.venv`.

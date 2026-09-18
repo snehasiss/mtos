@@ -6,6 +6,8 @@
 > [asset-control-device-interfaces.md](asset-control-device-interfaces.md).
 > MAIN/PROG and CV work described below is now explicitly parked until the second
 > isolated track can be completed; it is not part of the first coding increment.
+> ADR-009 now governs target service ownership, real-time communication and
+> recovery; this file remains predecessor evidence only.
 
 Date: 2026-09-13. Status: proposed, not an accepted ADR or coding authorization.
 Scope: first DCC-EX control increment on port 5302, using Python/Flask and an
@@ -170,8 +172,8 @@ serial transcript; keep bounded diagnostic logs for failed bench tests.
 2. **Transport and device status:** port framing/commands/parser with a fake serial
    transport; add handshake, output parsing, exclusive ownership, clean shutdown,
    queue cancellation and reconnection resynchronization. Wire tools/asset_control
-   to the real service at 0.0.0.0:5302. Reuse Flask/phone-first conventions, not
-   the old React build as an obligatory new runtime stack.
+   to the real service at 0.0.0.0:5302. Use the React/TypeScript phone-first
+   frontend as a build-time toolchain; Flask remains the only production runtime.
 3. **Operating parity:** eligible roster, selected locomotive, speed/direction,
    functions, locomotive stop, global emergency stop and independent A/B power.
    UI distinguishes motion stop from power off and unconfirmed from observed state.

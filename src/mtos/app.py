@@ -1,6 +1,7 @@
 """Flask application factory for the MTOS asset library."""
 
 import os
+import hmac
 import secrets
 import sqlite3
 import tempfile
@@ -18,6 +19,7 @@ from flask import (
 from werkzeug.exceptions import HTTPException
 
 from .assets.model import LOCATIONS, TYPES, Possession, Status
+from .image_optimizer import ImageOptimizerBusy
 from .roster import Conflict, Roster
 
 
@@ -25,6 +27,7 @@ def create_app(config=None):
     app = Flask(__name__)
     app.config.update(
         MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        INTERNAL_TOKEN=os.environ.get("MTOS_INTERNAL_TOKEN", "development-only"),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Strict",
     )
@@ -42,6 +45,11 @@ def create_app(config=None):
     @app.before_request
     def protect_writes():
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            if request.path.startswith("/internal/"):
+                supplied = request.headers.get("X-MTOS-Internal-Token", "")
+                if not hmac.compare_digest(supplied, app.config["INTERNAL_TOKEN"]):
+                    abort(403)
+                return
             expected = session.get("csrf")
             if not expected or not secrets.compare_digest(
                 expected, request.headers.get("X-CSRF-Token", "")
@@ -62,6 +70,8 @@ def create_app(config=None):
 
     @app.errorhandler(Exception)
     def errors(error):
+        if isinstance(error, ImageOptimizerBusy):
+            return jsonify(error=str(error)), 503
         if isinstance(error, HTTPException):
             return jsonify(error=error.description), error.code
         if isinstance(error, KeyError):
@@ -91,7 +101,7 @@ def create_app(config=None):
             db.execute("SELECT 1 FROM asset LIMIT 1")
         return jsonify(
             status="ok",
-            service="asset_manager",
+            service="mtos_asset",
             pid=os.getpid(),
             instance=os.environ.get("MTOS_INSTANCE"),
         )
@@ -172,6 +182,34 @@ def create_app(config=None):
     @app.post("/api/consists")
     def add_consist():
         return jsonify(roster.save_consist(request.get_json())), 201
+
+    @app.get("/internal/operating-locomotives")
+    def operating_locomotives():
+        supplied = request.headers.get("X-MTOS-Internal-Token", "")
+        if not hmac.compare_digest(supplied, app.config["INTERNAL_TOKEN"]):
+            abort(403)
+        items = []
+        for asset in roster.search(family="loco", status="active", limit=100)["items"]:
+            life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+            if life.get("possession") != "received" or control.get("dcc") is not True:
+                continue
+            address = control.get("address")
+            if type(address) is not int:
+                continue
+            proto = asset.get("prototype") or {}
+            items.append({"id": asset["id"], "reporting_mark": proto.get("reporting_mark"),
+                          "road_number": proto.get("road_number"), "prototype": proto.get("model"),
+                          "address": address})
+        return jsonify(items=items)
+
+    @app.post("/internal/control-leases")
+    def control_leases():
+        value = request.get_json()
+        return jsonify(leases=roster.acquire_leases(
+            value.get("asset_ids"), value.get("expected_revisions") or {},
+            value.get("core_session_id"), value.get("core_epoch"), value.get("purpose"),
+            value.get("duration_seconds", 30),
+        ))
 
     @app.patch("/api/consists/<consist_id>")
     def update_consist(consist_id):

@@ -21,17 +21,20 @@ from mtos.roster import data_root
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--service", choices=["asset_manager", "asset_control"], default="asset_manager"
+        "--service",
+        choices=["mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core"],
+        default="mtos_asset",
     )
     parser.add_argument("action", choices=["start", "stop", "restart", "status"])
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host")
     args = parser.parse_args()
-    args.port = {"asset_manager": 5301, "asset_control": 5302}[args.service]
-    if args.service == "asset_control":
-        print(
-            "asset_control: port 5302 reserved; DCC/electronics control is not implemented yet."
-        )
-        return 0 if args.action in ("stop", "status") else 1
+    # asset_manager is a compatibility spelling. Canonicalize it so old and new
+    # launchers share one lock, pidfile and process and cannot bind port 5301 twice.
+    aliases = {"asset_manager": "mtos_asset", "asset_control": "mtos_hmi"}
+    args.service = aliases.get(args.service, args.service)
+    args.port = {"mtos_asset": 5301, "mtos_hmi": 5302, "mtos_core": 5303, "mtos_dcc": 5304}[args.service]
+    if args.host is None:
+        args.host = "0.0.0.0" if args.service in ("mtos_asset", "mtos_hmi") else "127.0.0.1"
     run = data_root() / "run"
     run.mkdir(parents=True, exist_ok=True)
     pidfile = run / f"{args.service}.json"
@@ -93,6 +96,8 @@ def main():
                     args.host,
                     "--port",
                     str(args.port),
+                    "--service",
+                    args.service,
                 ],
                 cwd=ROOT,
                 stdout=log,

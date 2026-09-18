@@ -5,6 +5,11 @@
 > refines this ADR's execution and recovery rules. Buffer-stop lights are local
 > ESP32-timed 74HC595 outputs; chemical-plant control is deferred. The hardware
 > quantities and budgets below remain provisional until component mapping and measurement.
+> The service boundary, Core API, durable execution ledger, node readiness and
+> global servo-permit rules are finalized in
+> [the mtos_mc low-level design](../architecture/mtos-mc-module.md). Where this
+> ADR's earlier producer terminology is ambiguous, `mtos_mc` is the MQTT producer
+> and execution owner while `mtos_core` remains operational authority.
 
 - Status: Accepted; equipment currents require commissioning measurements
 - Date: 2026-09-07; revised 2026-09-14
@@ -14,7 +19,7 @@
 
 MTOS must inventory and operate stationary railroad assets without requiring
 JMRI, WiThrottle, or another external control application. The initial scope is
-20 turnouts, 20 signals, and two representative trackside installations. The
+20 turnouts, 20 signals, and one water-tank machine. The
 design must run on modest hardware, preserve the direct DCC control path, avoid
 simultaneous servo inrush, and distinguish durable asset/configuration data
 from commands and observed operational state.
@@ -119,14 +124,21 @@ Initial control planning includes the water tower. The chemical plant is deferre
 
 | ID | Installation | Electrical treatment |
 | --- | --- | --- |
-| `E001` | Broadway Limited operating water tower | Native 12 V motor/sound equipment; provisional 1 A branch; operate through its supplied control interface or an isolated dry contact |
+| `E001` | Broadway Limited 7924 operating water tower | Native 12 V motor/sound equipment on a fused pre-XL4015 bus tap; preserve the supplied button and place an isolated normally-open relay contact in parallel; provisional 1 A branch pending measurement |
 | Deferred | Faller chemical plant lighting | Excluded from the initial control scope and revised load subtotal; no E002 assignment is prescribed |
 
-The published water-tower information does not state current. Its complete
-movement-and-sound cycle must be measured before final fuse selection. The
-water-tower motor is not driven from a PCA9685 output. Additional lighting,
-turntables, and animated installations are added later as independently
-inventoried `E` assets with measured loads and appropriate controllers.
+The manufacturer specifies standard 12 V DC power and requires the included
+pushbutton to trigger the motorized spout and sound sequence. MTOS does not add a
+DCC accessory decoder. ESP32 firmware times an isolated relay contact wired in
+parallel with that button; it does not inject a GPIO voltage into the trigger
+leads. The original button remains usable. Measure open-switch voltage, closed-
+switch current, polarity sensitivity, required press time, full cycle time and
+12 V peak/operating current before selecting the relay contact rating, pulse,
+busy window and final fuse. The water-tower motor is never driven from ESP32,
+PCA9685 or 74HC595. See the [manufacturer product page](https://broadway-limited.com/products/7924-operating-water-tower-w-sound-up-weathered-ho).
+
+Additional lighting, turntables, and animated installations are added later as
+independently inventoried `E` assets with measured loads and appropriate controllers.
 
 ## Accessory nodes and network
 

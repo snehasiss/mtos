@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+frontend_dir="$project_dir/frontend/asset_control"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "pnpm is required to build the asset_control React UI" >&2
+    exit 1
+fi
+
+cd "$frontend_dir"
+pnpm install --frozen-lockfile
+pnpm run build

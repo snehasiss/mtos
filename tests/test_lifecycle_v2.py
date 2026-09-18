@@ -66,7 +66,7 @@ def test_schema_upgrade_preserves_old_values(tmp_path):
     assert (root / "db/before-lifecycle-v3.sqlite3").is_file()
     assert life["acquisition"]["legacy_possession"] == "parked"
     with roster.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert Roster(root).get("L001")["revision"] == 3
 
@@ -89,7 +89,7 @@ def test_manual_restore_preserves_previous_data_and_refuses_running_service(tmp_
     assert Roster(previous).get("L001")["label"] == "After backup"
 
 
-def test_backup_requires_explicit_mode_and_asset_control_is_reserved(tmp_path):
+def test_backup_requires_explicit_mode_and_asset_control_status_is_available(tmp_path):
     project = Path(__file__).resolve().parents[1]
     result = subprocess.run(
         [sys.executable, str(project / "tools/mtos_backup"), "--remote", str(tmp_path)],
@@ -104,11 +104,11 @@ def test_backup_requires_explicit_mode_and_asset_control_is_reserved(tmp_path):
             str(project / "tools/service.py"),
             "--service",
             "asset_control",
-            "start",
+            "status",
         ],
         capture_output=True,
         text=True,
         check=False,
         env={**os.environ, "MTOS_DATA_DIR": str(tmp_path / "data")},
     )
-    assert result.returncode == 1 and "5302 reserved" in result.stdout
+    assert result.returncode == 0 and "Stopped" in result.stdout

@@ -348,3 +348,29 @@ def test_optimizer_rejects_image_too_small_without_upscaling(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="at least 16 by 9"):
         optimize_image(source, destination)
     assert not destination.exists()
+
+
+def test_optimizer_rejects_excess_decoded_pixels_before_conversion(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import mtos.image_optimizer as optimizer
+
+    source = tmp_path / "large.png"
+    destination = tmp_path / "out.jpg"
+    Image.new("RGB", (20, 10), "red").save(source)
+    monkeypatch.setattr(optimizer, "MAX_DECODED_PIXELS", 199)
+
+    with pytest.raises(ValueError, match="decoded-pixel"):
+        optimize_image(source, destination)
+    assert not destination.exists()
+
+
+def test_optimizer_rejects_excess_source_bytes(tmp_path: Path, monkeypatch) -> None:
+    import mtos.image_optimizer as optimizer
+
+    source = tmp_path / "large.jpg"
+    source.write_bytes(b"12345")
+    monkeypatch.setattr(optimizer, "MAX_SOURCE_BYTES", 4)
+
+    with pytest.raises(ValueError, match="20 MiB"):
+        optimize_image(source, tmp_path / "out.jpg")

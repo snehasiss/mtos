@@ -13,12 +13,21 @@ from proposals still under discussion.
 - [ADR-006: MQTT for accessory messaging](decisions/ADR-006-mqtt-accessory-messaging.md)
 - [ADR-007: Stationary assets, control network, and power management](decisions/ADR-007-stationary-assets-control-network-and-power.md)
 - [ADR-008: Normalized asset-management and roster domain](decisions/ADR-008-asset-inventory-model.md)
+- [ADR-009: Service decomposition and real-time control architecture](decisions/ADR-009-service-decomposition-and-control-architecture.md)
 
 ## Working architecture
+
+- [Phase 1 CSB1 MAIN low-level design](architecture/asset-control-phase-1-low-level-design.md)
+- [Real-time control-service architecture](architecture/control-service-architecture.md)
+- [mtos_dcc module checkpoint](architecture/mtos-dcc-module.md)
+- [mtos_core module checkpoint](architecture/mtos-core-module.md)
+- [mtos_hmi module checkpoint](architecture/mtos-hmi-module.md)
+- [mtos_mc scope and low-level design](architecture/mtos-mc-module.md)
 
 - [asset_control implementation contract — 2026-09-17 review](architecture/asset-control-implementation-contract.md)
 
 - [Run, migrate and back up the roster](operations/roster.md)
+- [Integrated service startup and shutdown](operations/service-startup.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)
 - [asset_control pre-design](architecture/asset-control-pre-design.md)
@@ -29,6 +38,7 @@ from proposals still under discussion.
 ## Reviews
 
 - [Layout automation ADR review](reviews/layout-automation-review.md)
+- [Service architecture design review — 2026-09-18](mtos-review-design-2026-09-18.md)
 
 An ADR marked **Proposed** is not an implementation commitment. It exists so
 the model can be reviewed against real railroad operations before code and

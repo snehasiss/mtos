@@ -1,8 +1,16 @@
 # asset_control device-interface plan
 
+> **Historical boundary note.** The device semantics below remain applicable,
+> but ADR-009 assigns DCC ownership to `mtos_dcc`, accessory execution to
+> `mtos_mc`, and authoritative commands/jobs to `mtos_core`. It supersedes the
+> single-service, shared-database and polling assumptions in this document.
+>
 > The [2026-09-17 implementation contract](asset-control-implementation-contract.md)
 > governs execution details: MAIN-scoped power, accepted/started events, producer
 > sessions, configuration provisioning, reservations and buffer-stop indicators.
+> The finalized service contract is now
+> [mtos_mc scope and low-level design](mtos-mc-module.md); it governs where this
+> earlier proposal leaves concurrency, persistence or readiness open.
 
 - **Date:** 2026-09-14
 - **Status:** Proposed contracts for review; no implementation
@@ -116,7 +124,7 @@ proof that the locomotive physically moved.
 | `serial/controller.py` | Redesign around one transport scheduler and connection sessions; do not copy queue behavior unchanged |
 | `state.py` | Replace optimistic defaults with unknown/stale/report confidence |
 | `api/routes.py` | Rebuild around asset IDs, shared roster, CSRF, typed operations and explicit outcomes |
-| React frontend | Use as UX reference; implement in the MTOS Flask/static stack |
+| React frontend | Reimplemented in TypeScript/Vite against MTOS APIs; Flask serves the compiled static bundle |
 
 Known predecessor defects to cover in tests include commands surviving disconnect,
 serial errors not completing cleanup, non-atomic checking of the programming lock,
@@ -144,7 +152,10 @@ class AccessoryNetwork(Protocol):
 
 The adapter owns MQTT connection/reconnection, node presence/session tracking,
 publish/receive validation, acknowledgement correlation, and scheduler wake-up.
-The application service owns durable jobs and revalidates roster configuration.
+Core owns the canonical durable command and system-visible result. `mtos_mc`
+owns the execution ledger required for physical deduplication and recovery; both
+revalidate the leased asset/configuration revision and fencing token defined by
+ADR-009.
 
 ### MQTT topic shape
 
@@ -291,5 +302,6 @@ fail closed if a live device path or production broker is supplied accidentally.
    broker TLS policy for the isolated layout LAN.
 4. Exact 74HC595 signal output circuit and whether transistor/MOSFET stages are
    needed for the constructed LED wiring and measured aggregate current.
-5. Whether initial UI job updates use polling only or add SSE after measurement.
+5. The Socket.IO event projection and snapshot shape for accessory jobs; polling
+   is diagnostic fallback only.
 6. Retention limit for completed jobs/events and manual cleanup policy.

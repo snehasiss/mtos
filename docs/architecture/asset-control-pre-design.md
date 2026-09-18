@@ -1,11 +1,17 @@
 # asset_control pre-design
 
+> **Historical design baseline.** ADR-009 supersedes this document's single
+> `asset_control` process, shared-database access, command-producer placement and
+> polling assumptions. Retain it for device requirements and staged scope only;
+> the target services and authority are defined by the
+> [control-service architecture](control-service-architecture.md).
+>
 > Updated review: the [implementation contract](asset-control-implementation-contract.md)
 > dated 2026-09-17 governs refined execution, provisioning, sequencing and recovery
 > details below. Chemical-plant control is deferred; buffer lights are included.
 
 - **Date:** 2026-09-14
-- **Status:** Review checkpoint; implementation has not started
+- **Status:** Historical/superseded topology; retained requirements baseline
 - **Service:** `asset_control`, Flask, `0.0.0.0:5302`
 - **Data authority:** the same SQLite database used by `asset_manager`
 
@@ -82,7 +88,10 @@ flowchart LR
     Node --> Machine
 ```
 
-The serial and MQTT paths fail independently. Loss of Wi-Fi or MQTT may make
+The browser edge is revised by
+[the real-time control architecture](control-service-architecture.md): commands
+and state use Socket.IO/WebSocket rather than one-second polling. The serial and
+MQTT paths fail independently. Loss of Wi-Fi or MQTT may make
 stationary assets unavailable, but must not interrupt the CSB1 transport. Loss of
 CSB1 must not stop the accessory scheduler. The UI presents both control points
 without pretending their acknowledgement semantics are identical.
@@ -280,9 +289,9 @@ Node/React production runtime. The first screen has:
 - minimum 44 px touch targets and the existing MTOS visual language.
 
 The UI must not display a queued accessory command as completed or a serial write
-as physical feedback. Polling can be the first accessory-job update mechanism;
-server-sent events or WebSocket delivery may be added only if polling proves
-inadequate. Flask-SocketIO is therefore not a pre-design dependency.
+as physical feedback. ADR-009 supersedes the original polling proposal:
+Socket.IO/WebSocket is the normal command/event path, with snapshots after a
+reconnect or sequence gap. HTTP polling is diagnostic compatibility only.
 
 ## Safety and failure rules
 
@@ -347,8 +356,9 @@ ordinary MAIN and accessory-control foundation.
 - Exact signal driver topology and channel allocation for the constructed nodes.
 - Water-tank dry-contact/interface timing and measured current.
 - Turntable motor driver, homing, position model, feedback, and actions.
-- Whether accessory job updates need anything beyond simple HTTP polling.
-- Operational history retention and cleanup limits.
+- Socket.IO/WebSocket supplies accessory job updates; one-second HTTP polling is
+  not the normal operational path.
+- ADR-009 defines Version 1 operational history and cleanup limits.
 - MAIN/PROG switching, CV programming, and address-change recovery; all are parked.
 
 Unknowns that affect a concrete device operation must be resolved before that

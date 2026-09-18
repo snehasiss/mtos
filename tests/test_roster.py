@@ -112,6 +112,7 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     client = app.test_client()
     page = client.get("/")
     assert page.status_code == 200
+    assert client.get("/health").json["service"] == "mtos_asset"
     assert b"mtos-logo-wireframe.png" in page.data
     assert b'aria-label="Previous page">\xe2\x86\x90</button>' in page.data
     assert b'aria-label="Next page">\xe2\x86\x92</button>' in page.data
@@ -163,6 +164,54 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     assert client.get("/api/assets/L001/media/L001_1.jpg").status_code == 200
     assert client.get("/api/assets/L001/media/anything.jpg").status_code == 404
     assert client.get("/api/assets?q=Test").json["total"] == 1
+
+
+def test_asset_control_lease_is_atomic_renewable_and_protects_configuration(tmp_path):
+    app = create_app({"DATA_ROOT": tmp_path / "data", "TESTING": True, "INTERNAL_TOKEN": "secret"})
+    roster = app.extensions["roster"]
+    asset = roster.save(loco(
+        prototype={"reporting_mark": "UP", "road_number": "28"},
+        control={"dcc": True, "address": 28},
+        lifecycle={"possession": "received", "status": "active", "location": "test_main_1"},
+    ))
+    client = app.test_client()
+    internal = {"X-MTOS-Internal-Token": "secret"}
+    request = {
+        "asset_ids": ["L001"], "expected_revisions": {"L001": asset["revision"]},
+        "core_session_id": "core-1", "core_epoch": 1,
+        "purpose": "throttle", "duration_seconds": 30,
+    }
+    assert client.post("/internal/control-leases", json=request).status_code == 403
+    first = client.post("/internal/control-leases", headers=internal, json=request)
+    assert first.status_code == 200
+    renewed = client.post("/internal/control-leases", headers=internal, json=request)
+    assert renewed.json["leases"][0]["lease_id"] == first.json["leases"][0]["lease_id"]
+    assert renewed.json["leases"][0]["fencing_token"] == 1
+    other = client.post(
+        "/internal/control-leases", headers=internal,
+        json={**request, "core_session_id": "core-2"},
+    )
+    assert other.status_code == 409
+    superseded = client.post(
+        "/internal/control-leases", headers=internal,
+        json={**request, "core_session_id": "core-2", "core_epoch": 2},
+    )
+    assert superseded.status_code == 200
+    assert superseded.json["leases"][0]["fencing_token"] == 2
+    token = client.get("/api/session").json["csrf"]
+    changed = client.patch(
+        "/api/assets/L001", headers={"X-CSRF-Token": token},
+        json={"revision": asset["revision"], "control": {"dcc": True, "address": 29}},
+    )
+    assert changed.status_code == 409
+    descriptive = client.patch(
+        "/api/assets/L001", headers={"X-CSRF-Token": token},
+        json={"revision": asset["revision"], "label": "Still editable"},
+    )
+    assert descriptive.status_code == 200
+    locomotives = client.get("/internal/operating-locomotives", headers=internal)
+    assert locomotives.status_code == 200
+    assert locomotives.json["items"][0]["id"] == "L001"
 
 
 def test_backup_restores_database_and_media_and_detects_corruption(roster, tmp_path):

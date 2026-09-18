@@ -29,7 +29,7 @@ def test_service_bind(tmp_path, monkeypatch, capsys, action, explicit_host):
     run = tmp_path / "run"
     run.mkdir()
     if action == "restart":
-        (run / "asset_manager.json").write_text(
+        (run / "mtos_asset.json").write_text(
             json.dumps(
                 {"pid": 123, "host": "127.0.0.1", "port": 5301, "instance": "old"}
             )
@@ -65,7 +65,7 @@ def test_service_bind(tmp_path, monkeypatch, capsys, action, explicit_host):
     expected = explicit_host or "0.0.0.0"
     command = state["command"]
     assert command[command.index("--host") + 1] == expected
-    assert json.loads((run / "asset_manager.json").read_text())["host"] == expected
+    assert json.loads((run / "mtos_asset.json").read_text())["host"] == expected
     assert f"listening on {expected}:5301" in capsys.readouterr().out
 
 
@@ -87,3 +87,69 @@ def test_direct_server_bind(tmp_path, monkeypatch, explicit_host):
     runpy.run_path(str(PROJECT / "tools/serve.py"), run_name="__main__")
     assert captured["host"] == (explicit_host or "0.0.0.0")
     assert captured["port"] == 5301
+
+
+def test_asset_manager_name_canonicalizes_to_mtos_asset(tmp_path, monkeypatch, capsys):
+    spec = importlib.util.spec_from_file_location(
+        "service_alias", PROJECT / "tools/service.py"
+    )
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+    monkeypatch.setattr(service, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        sys, "argv", ["service.py", "--service", "asset_manager", "status"]
+    )
+    service.main()
+    assert "Stopped" in capsys.readouterr().out
+    assert (tmp_path / "run/mtos_asset.lock").exists()
+    assert not (tmp_path / "run/asset_manager.lock").exists()
+
+
+def test_asset_control_name_canonicalizes_to_mtos_hmi(tmp_path, monkeypatch, capsys):
+    spec = importlib.util.spec_from_file_location(
+        "service_hmi_alias", PROJECT / "tools/service.py"
+    )
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+    monkeypatch.setattr(service, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        sys, "argv", ["service.py", "--service", "asset_control", "status"]
+    )
+    service.main()
+    assert "Stopped" in capsys.readouterr().out
+    assert (tmp_path / "run/mtos_hmi.lock").exists()
+    assert not (tmp_path / "run/asset_control.lock").exists()
+
+
+@pytest.mark.parametrize(
+    ("service_name", "expected_port"), [("mtos_core", 5303), ("mtos_dcc", 5304)]
+)
+def test_internal_services_default_to_loopback(
+    tmp_path, monkeypatch, capsys, service_name, expected_port
+):
+    spec = importlib.util.spec_from_file_location(
+        f"service_{service_name}", PROJECT / "tools/service.py"
+    )
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+    monkeypatch.setattr(service, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(service.time, "sleep", lambda _: None)
+    monkeypatch.setattr(service.secrets, "token_hex", lambda _: "instance")
+    state = {}
+
+    def launch(command, **kwargs):
+        state["command"] = command
+        return SimpleNamespace(pid=456, poll=lambda: None)
+
+    def health(url, timeout):
+        assert url == f"http://127.0.0.1:{expected_port}/health"
+        return io.BytesIO(json.dumps({"pid": 456, "instance": "instance"}).encode())
+
+    monkeypatch.setattr(service.subprocess, "Popen", launch)
+    monkeypatch.setattr(service.urllib.request, "urlopen", health)
+    monkeypatch.setattr(sys, "argv", ["service.py", "--service", service_name, "start"])
+    service.main()
+    command = state["command"]
+    assert command[command.index("--host") + 1] == "127.0.0.1"
+    assert command[command.index("--port") + 1] == str(expected_port)
+    assert f"127.0.0.1:{expected_port}" in capsys.readouterr().out

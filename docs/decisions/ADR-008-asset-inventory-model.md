@@ -346,6 +346,16 @@ cards, detail galleries, directory imports, and HTTP uploads one predictable
 aspect ratio. JPEG output is progressive and optimized. Input sequence numbers
 are preserved.
 
+Image processing is explicitly bounded because compressed file size does not
+bound decoded memory. Version 1 accepts at most 20 MiB compressed input and
+25,000,000 decoded pixels. Dimensions are inspected before conversion or resize;
+decompression-bomb and over-limit images are rejected. `mtos_asset` performs one
+optimization at a time with a bounded waiting queue of four requests; a full
+queue returns a busy response rather than accumulating memory. Bulk directory
+import is a maintenance operation and must not run during live railroad
+operation. These are safety/resource limits, not changes to the 1280x720 JPEG
+output contract.
+
 Media is operational user data and is excluded from the MTOS source repository.
 Git history is not a backup mechanism for changing JPEG and SQLite data. The
 SQLite database and the complete media tree form one backup unit. A consistent
@@ -365,10 +375,12 @@ directory. Keep snapshots on a separate device.
 
 ## Application boundary
 
-The service is `asset_manager`, on port 5301. Its launcher is
-`tools/asset_manager (start|stop|restart|status)`. The future `asset_control`
-service reserves port 5302 and `tools/asset_control`; no hardware control is
-implemented as part of the asset-manager change.
+The service is `mtos_asset`, on port 5301. Its launcher is
+`tools/mtos_asset (start|stop|restart|status)`; `tools/asset_manager` is a
+compatibility alias for the same process. The separate `asset_control`
+service uses port 5302 and `tools/asset_control`. Phase 1 MAIN locomotive control
+was implemented after this asset-manager decision; this ADR still governs
+inventory ownership and does not define live operational state.
 
 The Python domain is served through a Flask JSON API and an iPhone-first HTML
 interface. SQLite tables normalize asset, model, prototype, control, component,

@@ -88,13 +88,13 @@
   <text class="tiny" x="925" y="500">Q0…Q7</text>
 
   <rect class="device" x="700" y="600" width="205" height="98" rx="8"/>
-  <text class="label" x="738" y="631">Relay / driver</text>
-  <text class="small" x="720" y="655">selected per machine load</text>
-  <text class="tiny" x="721" y="678">GPIO control, isolated if needed</text>
+  <text class="label" x="738" y="631">Relay driver</text>
+  <text class="small" x="720" y="655">GPIO · transistor · flyback</text>
+  <text class="tiny" x="721" y="678">isolated NO contact</text>
   <rect class="load" x="980" y="600" width="155" height="98" rx="8"/>
-  <text class="label" x="1012" y="631">Machine</text>
-  <text class="small" x="996" y="655">water tank / future</text>
-  <text class="tiny" x="1014" y="678">native supply</text>
+  <text class="label" x="1012" y="631">BLI 7924</text>
+  <text class="small" x="996" y="655">relay across pushbutton</text>
+  <text class="tiny" x="1014" y="678">fused native 12 V</text>
   <path class="wire" d="M610 445 H620 V645 H700"/>
   <path class="wire" d="M905 649 H980"/>
 

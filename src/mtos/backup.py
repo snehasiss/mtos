@@ -137,7 +137,7 @@ def restore_current(snapshot, destination):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError(
-                "Stop asset_manager and asset_control before restoring"
+                "Stop mtos_asset and all control services before restoring"
             ) from error
         # Earlier service versions did not hold the lifetime lock. Check their PID state too.
         for state in (destination / "run").glob("*.json"):

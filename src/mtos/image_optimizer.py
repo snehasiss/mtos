@@ -1,6 +1,7 @@
 """Shared image normalization used by uploads and directory imports."""
 
 import tempfile
+import threading
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -8,13 +9,38 @@ from PIL import Image, ImageOps
 MAX_IMAGE_SIZE = (1280, 720)
 ASPECT_RATIO = (16, 9)
 JPEG_QUALITY = 85
+MAX_SOURCE_BYTES = 20 * 1024 * 1024
+MAX_DECODED_PIXELS = 25_000_000
+MAX_WAITING_OPTIMIZATIONS = 4
+
+
+class ImageOptimizerBusy(RuntimeError):
+    """The bounded image optimizer has no free admission slot."""
+
+
+_OPTIMIZATION_SLOTS = threading.BoundedSemaphore(MAX_WAITING_OPTIMIZATIONS + 1)
+_OPTIMIZER = threading.Lock()
 
 
 def optimize_image(source: Path, destination: Path) -> None:
     """Atomically create a center-cropped 16:9 JPEG, at most 1280x720."""
+    if source.stat().st_size > MAX_SOURCE_BYTES:
+        raise ValueError("image source exceeds the 20 MiB limit")
+    if not _OPTIMIZATION_SLOTS.acquire(blocking=False):
+        raise ImageOptimizerBusy("image optimizer is busy; retry later")
+    try:
+        with _OPTIMIZER:
+            _optimize_image(source, destination)
+    finally:
+        _OPTIMIZATION_SLOTS.release()
+
+
+def _optimize_image(source: Path, destination: Path) -> None:
     temporary_name = None
     try:
         with Image.open(source) as opened:
+            if opened.width * opened.height > MAX_DECODED_PIXELS:
+                raise ValueError("image exceeds the 25,000,000 decoded-pixel limit")
             image = ImageOps.exif_transpose(opened)
             if image.mode in ("RGBA", "LA") or "transparency" in image.info:
                 rgba = image.convert("RGBA")

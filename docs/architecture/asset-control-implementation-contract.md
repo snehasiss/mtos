@@ -1,10 +1,20 @@
 # asset_control implementation contract
 
-Date: 2026-09-17. Status: reviewed design checkpoint, before implementation.
+Date: 2026-09-17. Status: historical Phase 1 implementation contract.
+
+> ADR-009 supersedes this contract's single-process topology, unrestricted shared
+> SQLite access and runtime ownership. This remains the record of the first MAIN
+> implementation and a source of device behavior and acceptance requirements.
+> New work must follow the six-service control architecture and its lease,
+> fencing, recovery and bounded-resource contracts.
 
 This document refines ADR-007 and the pre-design/device-interface plans. Where
 their execution details differ, this contract governs the first implementation.
 It does not claim that firmware, migrations or hardware have been implemented.
+
+The [Phase 1 low-level design](asset-control-phase-1-low-level-design.md) defines
+the concrete modules, database changes, methods, HTTP endpoints, UI behaviour and
+acceptance scenarios for CSB1 MAIN implementation.
 
 ## Scope and implementation order
 
@@ -17,16 +27,22 @@ Implement three reviewable increments:
 1. DCC MAIN end to end: one runtime owner, USB selection, verified handshake,
    output awareness, roster eligibility, MAIN power, throttle, functions,
    stop/emergency stop and mobile UI. Start with fake serial transports.
-2. One complete accessory node: provisioned configuration, readiness, durable
+2. PROG CV programming in the same UI: isolated programming-track arrangement,
+   CV reads/writes, readback, timeout handling and coordinated address changes.
+   Confirm physical wiring before commissioning; MAIN/PROG role switching is
+   a separate decision, not implicit in selecting the Programming screen.
+3. One complete accessory node: provisioned configuration, readiness, durable
    jobs, ESP32 firmware, one turnout and one signal, then multiple nodes,
    double-slips and local buffer-stop flashing. Test failure/restart behaviour.
-3. Water-tank control after the trigger interface and timing are established.
+   Water-tank control follows within this checkpoint after trigger timing is established.
    Turntables await selected hardware and a defined action set.
 
-CV programming, MAIN/PROG role changes, routes, interlocking, autonomous operation
+CV programming is Phase 2. MAIN/PROG role changes, routes, interlocking, autonomous operation
 and chemical-plant control are deferred. Read-only output awareness is required
-even though changing output roles is deferred. Use simple HTTP polling initially;
-no additional UI runtime, distributed scheduler or generic plugin framework.
+even though changing output roles is deferred. The initial HTTP-polling decision
+is superseded by [the real-time control architecture](control-service-architecture.md):
+React uses Socket.IO for acknowledged commands and server-pushed control events.
+MQTT remains exclusive to ESP32 integration; no generic plugin framework is added.
 
 ## Runtime and shared data
 
@@ -193,7 +209,7 @@ Commission real outputs separately with recorded hardware/firmware and measureme
 
 Keep operational history bounded by configurable age/count limits; preserve
 unresolved jobs and their evidence until reconciliation. Do not store unlimited
-serial/MQTT transcripts. Exact retention defaults are an implementation setting.
+serial/MQTT transcripts. ADR-009 defines the Version 1 retention defaults.
 
 ## Hardware references
 
