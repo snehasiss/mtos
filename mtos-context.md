@@ -179,7 +179,7 @@ Nested unit role/orientation objects and operational consist execution are defer
 
 ## Persistence, API and security
 
-Default database: `data/db/mtos.sqlite3`, schema version 3. `MTOS_DATA_DIR` selects
+Default database: `data/db/asset.sqlite3`, schema version 3 at that checkpoint. `MTOS_DATA_DIR` selects
 an alternate data root. Normalized tables: asset, model, prototype, control,
 component, relation, lifecycle, media, consist, consist_unit, legacy_document,
 layout_location. Control/component payloads retain variable JSON configuration;
@@ -375,7 +375,7 @@ mtos/
 │   ├── test_service_bind.py
 │   └── test_mobile_ui.py
 ├── data/                           # Local operational data, not source history
-│   ├── db/                         # mtos.sqlite3, session.key, safety copy
+│   ├── db/                         # asset.sqlite3, session.key, safety copy
 │   ├── media/{family}/              # {asset_id}_n.jpg
 │   ├── run/                        # Service state, locks and logs
 │   └── .lock                       # Application data-write coordination
@@ -710,7 +710,7 @@ The current control scope has two independent control points in one Flask servic
 on `0.0.0.0:5302`: synchronous/bounded EX-CSB1 MAIN locomotive control over USB
 serial, and asynchronous durable/queued stationary control through ESP32 nodes
 over MQTT. Both consume authoritative asset/configuration data from the existing
-`data/db/mtos.sqlite3`; no second roster or JSON store is allowed. The Cubietruck
+`data/db/asset.sqlite3`; no second roster or JSON store is allowed. The Cubietruck
 is the sole producer/scheduler. Axon remains reserved for later SLM/autonomy.
 
 The initial operations are direct low-level asset commands: CSB1 readiness/power,
@@ -1222,3 +1222,25 @@ PUBACK is never treated as physical completion. MC performs durable idempotency,
 bounded evidence retention and restart reconciliation without blindly replaying
 physical actions. Core state and results flow to the existing HMI Socket.IO
 snapshot; HMI never connects to MQTT directly.
+
+### 2026-09-18: service-owned database names
+
+Persistent filenames now follow their owning services. The live Asset database
+was atomically renamed from `data/db/mtos.sqlite3` to
+`data/db/asset.sqlite3`, preserving 161 assets, 136 media records and all legacy
+history; SQLite integrity is clean and the approved schema version 5 migration
+was applied. `data/db/core.sqlite3` was initialized directly through the Core
+repository without starting hardware services. Future MC adapter evidence will
+use `data/db/mc.sqlite3` when that service is implemented.
+
+DCC and HMI intentionally have no `dcc.sqlite3` or `hmi.sqlite3`: their Version 1
+state is device/session state and a browser projection, respectively. Empty
+databases are not created for naming symmetry. Backup/restore now uses
+`asset.sqlite3`, includes `core.sqlite3` and future `mc.sqlite3` when present,
+and can still verify/restore older snapshots containing `mtos.sqlite3`.
+
+The Asset file still contains 195 completed `control_command` rows and one stale
+`control_reservation` from the superseded monolithic implementation. They were
+preserved rather than deleted or silently transformed during the filename
+migration. New canonical operational transactions belong to Core. Removal or
+archival of those legacy tables requires a separate explicit migration.

@@ -15,7 +15,7 @@ transaction records while remaining suitable for a small SBC.
 Use one embedded SQLite database as the authoritative live store for an MTOS
 installation.
 
-The roster database is `data/db/mtos.sqlite3`; photos are in `data/media`.
+The Asset database is `data/db/asset.sqlite3`; photos are in `data/media`.
 Both are excluded from Git. `MTOS_DATA_DIR` configures another live data root.
 Manual `tools/mtos_backup --remote PATH --backup` snapshots the database and media together;
 there is no installed backup schedule. See `docs/operations/roster.md`.

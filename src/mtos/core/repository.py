@@ -35,6 +35,7 @@ class CoreRepository:
                 CREATE TABLE IF NOT EXISTS core_metadata (
                     key TEXT PRIMARY KEY, value INTEGER NOT NULL
                 );
+                PRAGMA user_version=1;
                 """
             )
 

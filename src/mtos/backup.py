@@ -31,7 +31,19 @@ def verify(snapshot):
             or digest(path) != checksum
         ):
             raise ValueError(f"Backup integrity check failed: {name}")
-    database = snapshot / "db/mtos.sqlite3"
+    database = snapshot / "db/asset.sqlite3"
+    if not database.is_file():
+        database = snapshot / "db/mtos.sqlite3"
+    for name in ("asset.sqlite3", "core.sqlite3", "mc.sqlite3"):
+        candidate = snapshot / "db" / name
+        if not candidate.is_file():
+            continue
+        with sqlite3.connect(candidate.as_uri() + "?mode=ro", uri=True) as db:
+            if (
+                db.execute("PRAGMA integrity_check").fetchone()[0] != "ok"
+                or db.execute("PRAGMA foreign_key_check").fetchall()
+            ):
+                raise ValueError(f"Backup database integrity check failed: {name}")
     with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as db:
         if (
             db.execute("PRAGMA integrity_check").fetchone()[0] != "ok"
@@ -63,8 +75,14 @@ def backup(roster, remote):
         stage = Path(staging)
         (stage / "db").mkdir()
         with roster.lock(), roster.connect() as source:
-            with sqlite3.connect(stage / "db/mtos.sqlite3") as destination:
+            with sqlite3.connect(stage / "db/asset.sqlite3") as destination:
                 source.backup(destination)
+            for name in ("core.sqlite3", "mc.sqlite3"):
+                database = roster.database.parent / name
+                if database.is_file():
+                    with sqlite3.connect(database) as owned_source:
+                        with sqlite3.connect(stage / "db" / name) as destination:
+                            owned_source.backup(destination)
             shutil.copytree(roster.media, stage / "media")
         files = {
             str(p.relative_to(stage)): digest(p)
@@ -220,7 +238,10 @@ def main():
                 if previous:
                     print(f"Previous data preserved at {previous}")
         else:
-            if not (args.data_dir / "db/mtos.sqlite3").is_file():
+            if not any(
+                (args.data_dir / "db" / name).is_file()
+                for name in ("asset.sqlite3", "mtos.sqlite3")
+            ):
                 raise ValueError("No live roster database found")
             print(backup(Roster(args.data_dir), args.remote))
     except (OSError, ValueError, sqlite3.Error) as error:

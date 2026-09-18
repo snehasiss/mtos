@@ -163,44 +163,66 @@ def validate(payload):
 class Roster:
     def __init__(self, root=None):
         self.root = Path(root or data_root()).resolve()
-        self.database = self.root / "db" / "mtos.sqlite3"
+        self.database = self.root / "db" / "asset.sqlite3"
         self.media = self.root / "media"
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self.media.mkdir(parents=True, exist_ok=True)
-        with self.lock(), self.connect() as db:
-            version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version == 0:
-                sql = (Path(__file__).parent / "migrations/001_roster.sql").read_text()
-                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
-                version = 1
-            if version == 1:
-                sql = (
-                    Path(__file__).parent / "migrations/002_lifecycle.sql"
-                ).read_text()
-                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
-                version = 2
-            if version == 2:
-                safety = self.database.parent / "before-lifecycle-v3.sqlite3"
-                if not safety.exists():
-                    with sqlite3.connect(safety) as backup:
-                        db.backup(backup)
-                sql = (
-                    Path(__file__).parent / "migrations/003-simple-lifecycle.sql"
-                ).read_text()
-                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
-                version = 3
-            if version == 3:
-                sql = (Path(__file__).parent / "migrations/004_control.sql").read_text()
-                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
-                version = 4
-            if version == 4:
-                sql = (Path(__file__).parent / "migrations/005_asset_leases.sql").read_text()
-                db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
-                version = 5
-            if version != 5:
-                raise ValueError(f"Unsupported database schema: {version}")
-            db.execute("PRAGMA journal_mode=WAL")
-            self._migrate_media_layout(db)
+        with self.lock():
+            self._migrate_database_name()
+            with self.connect() as db:
+                self._migrate_schema(db)
+
+    def _migrate_database_name(self):
+        legacy = self.database.with_name("mtos.sqlite3")
+        if self.database.exists() and legacy.exists():
+            raise ValueError(
+                "Both asset.sqlite3 and legacy mtos.sqlite3 exist; resolve the "
+                "ambiguous Asset database before starting MTOS"
+            )
+        if not legacy.exists():
+            return
+        with sqlite3.connect(legacy) as db:
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        legacy.replace(self.database)
+        for suffix in ("-wal", "-shm"):
+            companion = Path(str(legacy) + suffix)
+            if companion.exists():
+                companion.replace(Path(str(self.database) + suffix))
+
+    def _migrate_schema(self, db):
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version == 0:
+            sql = (Path(__file__).parent / "migrations/001_roster.sql").read_text()
+            db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+            version = 1
+        if version == 1:
+            sql = (
+                Path(__file__).parent / "migrations/002_lifecycle.sql"
+            ).read_text()
+            db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+            version = 2
+        if version == 2:
+            safety = self.database.parent / "before-lifecycle-v3.sqlite3"
+            if not safety.exists():
+                with sqlite3.connect(safety) as backup:
+                    db.backup(backup)
+            sql = (
+                Path(__file__).parent / "migrations/003-simple-lifecycle.sql"
+            ).read_text()
+            db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+            version = 3
+        if version == 3:
+            sql = (Path(__file__).parent / "migrations/004_control.sql").read_text()
+            db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+            version = 4
+        if version == 4:
+            sql = (Path(__file__).parent / "migrations/005_asset_leases.sql").read_text()
+            db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+            version = 5
+        if version != 5:
+            raise ValueError(f"Unsupported database schema: {version}")
+        db.execute("PRAGMA journal_mode=WAL")
+        self._migrate_media_layout(db)
 
     def acquire_leases(self, asset_ids, expected_revisions, core_session_id, core_epoch, purpose, duration_seconds=30):
         if not asset_ids or not all(isinstance(value, str) for value in asset_ids):

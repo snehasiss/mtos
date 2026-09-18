@@ -9,6 +9,7 @@ import pytest
 
 from mtos.assets.model import LOCATIONS, AssetId, Lifecycle, Possession, Status
 from mtos.backup import backup, restore_current, select_snapshot
+from mtos.core.repository import CoreRepository
 from mtos.roster import Roster
 
 
@@ -40,7 +41,7 @@ def test_lifecycle_vocabulary_and_locations():
 def test_schema_upgrade_preserves_old_values(tmp_path):
     root = tmp_path / "data"
     (root / "db").mkdir(parents=True)
-    database = root / "db/mtos.sqlite3"
+    database = root / "db/asset.sqlite3"
     with sqlite3.connect(database) as db:
         schema = (
             Path(__file__).resolve().parents[1] / "src/mtos/migrations/001_roster.sql"
@@ -73,10 +74,13 @@ def test_schema_upgrade_preserves_old_values(tmp_path):
 
 def test_manual_restore_preserves_previous_data_and_refuses_running_service(tmp_path):
     roster = Roster(tmp_path / "data")
+    CoreRepository(roster.root)
     roster.save({"id": "L001", "family": "loco", "type": "diesel"})
     remote = tmp_path / "remote"
     remote.mkdir()
     snapshot = backup(roster, remote)
+    assert (snapshot / "db/asset.sqlite3").is_file()
+    assert (snapshot / "db/core.sqlite3").is_file()
     assert select_snapshot(remote) == snapshot
     roster.save({"revision": 1, "label": "After backup"}, asset_id="L001")
     lifetime = tmp_path / ".data.services.lock"

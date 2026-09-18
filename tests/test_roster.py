@@ -32,6 +32,7 @@ def test_database_roundtrip_search_and_concurrent_edits(roster):
         )
     )
     assert roster.database.parent.name == "db"
+    assert roster.database.name == "asset.sqlite3"
     assert roster.search("sal4202")["total"] == 1
     assert roster.search("' OR 1=1 --")["total"] == 0
     updated = roster.save({"revision": 1, "label": "Cab unit"}, asset_id="L001")
@@ -42,6 +43,21 @@ def test_database_roundtrip_search_and_concurrent_edits(roster):
     assert roster.get("L001")["label"] == "Cab unit"
     with roster.connect() as db:
         assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+
+def test_legacy_database_filename_is_migrated_once(tmp_path):
+    root = tmp_path / "data"
+    original = Roster(root)
+    original.save(loco())
+    legacy = root / "db" / "mtos.sqlite3"
+    original.database.replace(legacy)
+
+    migrated = Roster(root)
+
+    assert migrated.database.name == "asset.sqlite3"
+    assert migrated.get("L001")["family"] == "loco"
+    assert migrated.database.is_file()
+    assert not legacy.exists()
 
 
 def test_invalid_lifecycle_or_node_rolls_back_entire_asset(roster):

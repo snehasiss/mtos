@@ -209,6 +209,18 @@ because they run on the same host.
   adapter persistence explicitly required by their contracts.
 - `mtos_hmi` and `mtos_ai` own no authoritative railroad state.
 
+Canonical local database names follow their owning services:
+
+| Owner | Database | Content |
+|---|---|---|
+| `mtos_asset` | `data/db/asset.sqlite3` | Asset master data, configuration and Asset-owned leases/fences |
+| `mtos_core` | `data/db/core.sqlite3` | Canonical operational commands, reservations and outcomes |
+| `mtos_mc` | `data/db/mc.sqlite3` | Bounded subordinate hardware-execution evidence only |
+
+`mtos_dcc` and `mtos_hmi` are stateless in Version 1 and do not receive empty
+database files merely for naming symmetry. DCC observed state is rebuilt from the
+device/session; HMI state is a browser projection of Core.
+
 The initial implementation may migrate from the existing SQLite file in stages,
 but cross-service access must go through owned repositories/APIs and converge on
 separate ownership. No database transaction is claimed to be atomic with physical

@@ -334,7 +334,7 @@ Other assets use direct IDs, e.g. `G013_1.jpg`; type-only filenames cannot ident
 an individual asset. Unknown or ambiguous identities are reported without import.
 All output uses `data/media/<family>/ASSETID_n.jpg`. Existing destinations are skipped.
 
-Defaults are `data/db/mtos.sqlite3` and `data/media` relative to the project root;
+Defaults are `data/db/asset.sqlite3` and `data/media` relative to the project root;
 `MTOS_DATA_DIR` or the utility's `--data-dir` overrides the root. The importer
 queries `asset` and `prototype`, and registers each photo in the `media` table
 through the same transaction/locking boundary used by Flask and backups.

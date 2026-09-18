@@ -34,7 +34,8 @@ will compose these low-level operations, but is outside this design.
   components, relations, and media.
 - `asset_control` owns live connection state, command execution, desired state,
   reported state, faults, and bounded operational history.
-- Both services use `data/db/mtos.sqlite3`; there is no second roster or JSON
+- The canonical Asset store is now `data/db/asset.sqlite3` (renamed from the
+  historical `mtos.sqlite3`); there is no second roster or JSON
   inventory. SQLite transactions protect database changes, but cannot make a
   physical hardware action atomic.
 - `asset_control` binds `0.0.0.0:5302` and uses
@@ -65,7 +66,7 @@ flowchart LR
     Phone[iPhone browser]
     Control[asset_control :5302]
     Manager[asset_manager :5301]
-    DB[(data/db/mtos.sqlite3)]
+    DB[(data/db/asset.sqlite3)]
     Serial[DCC-EX adapter]
     CSB[EX-CSB1]
     Main[MAIN track output]

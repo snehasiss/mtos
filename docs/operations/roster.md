@@ -64,8 +64,12 @@ same `mtos_asset` lock, PID metadata and process, so they cannot start duplicate
 
 ## Data and migration
 
-`data/db/mtos.sqlite3` and `data/media/<family>/<asset_id>_n.jpg` are ignored by
+`data/db/asset.sqlite3` and `data/media/<family>/<asset_id>_n.jpg` are ignored by
 Git. `MTOS_DATA_DIR=/path/to/data` configures another root for service and utilities.
+Service-owned persistence uses `asset.sqlite3`, `core.sqlite3`, and, once MC is
+implemented, `mc.sqlite3`. DCC and HMI are stateless and have no database. The
+backup utility includes Core and MC databases when present; Asset and media are
+always required.
 Schema version 5 is initialized/upgraded automatically; SQL is in `src/mtos/migrations`.
 On first startup after the family-folder change, registered legacy files under
 `media/<asset_id>/` are moved to `media/<family>/`. Checksums and conflicting

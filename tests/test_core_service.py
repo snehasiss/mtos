@@ -84,6 +84,8 @@ def test_core_validates_leases_journals_and_deduplicates(tmp_path):
     assert tuple(command) == ("completed", "confirmed")
     assert reservation["address"] == 28
     assert service.repository.path.name == "core.sqlite3"
+    with sqlite3.connect(service.repository.path) as database:
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 1
 
 
 def test_core_emergency_latch_and_api(tmp_path):
