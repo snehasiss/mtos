@@ -1,6 +1,7 @@
 # mtos_mc scope and low-level design
 
-Date: 2026-09-18. Status: design finalized; implementation not started.
+Date: 2026-09-18. Status: host service, Core/HMI integration and firmware source
+implemented against fake transports; physical commissioning pending hardware.
 
 `mtos_mc` is the loopback-only hardware abstraction for ESP32 accessory nodes.
 It translates typed Core operations for turnouts, signals and trackside machines
@@ -41,7 +42,7 @@ MC owns:
 
 - one MQTT client connection and its reconnect policy;
 - node availability, boot identity, producer session and installed revision;
-- the durable execution/deduplication ledger and bounded event evidence;
+- the durable execution/deduplication ledger and adapter event evidence;
 - routing a logical asset operation to its owning node;
 - the global servo scheduler and per-node dispatch ordering;
 - command expiry, correlation, timeout and reconciliation state;
@@ -58,35 +59,31 @@ The service listens on `127.0.0.1:5305` and requires the internal MTOS token.
 Its database is `data/db/mc.sqlite3`, separate from Asset and Core databases.
 It stores only adapter-owned state:
 
-- `mc_metadata`: schema and monotonically increasing MC session epoch;
-- `mc_execution`: immutable IDs/payload hash, Core session/epoch, asset lease,
-  fence, node/boot/session, operation, state, timestamps and final result;
-- `mc_event`: bounded structured node and transport evidence;
-- `mc_node`: last boot, availability, installed revision, firmware and freshness;
-- `mc_asset_fence`: highest accepted fence per asset.
+- `metadata`: monotonically increasing MC session epoch;
+- `execution`: immutable IDs/payload hash and full request, including Core
+  session/epoch, asset lease/fence, node, operation and expiry, plus state,
+  timestamps and final result;
+- `event`: structured execution-transition evidence;
+- `node`: last boot, availability, installed revision, firmware and freshness;
+- `asset_fence`: highest accepted fence per asset.
 
-Version 1 permits at most 256 non-terminal/outstanding executions, 20 MQTT QoS 1
-inflight publications and 10,000 terminal execution records or seven days,
-whichever bound is reached first. Pending, uncertain and reconciliation-required
-records are never pruned to satisfy those limits. MQTT transcripts and secrets
-are not stored in the database.
+Version 1 permits at most 256 non-terminal/outstanding executions and targets 20
+MQTT QoS 1 inflight publications plus 10,000 terminal execution records or seven
+days, whichever terminal bound is reached first. The non-terminal limit is
+implemented; terminal/event pruning remains pending. Pending, uncertain and
+reconciliation-required records must never be pruned to satisfy those limits.
+MQTT transcripts and secrets are not stored in the database.
 
 ### Implementation layout and primary methods
 
 ```text
 src/mtos/mc/
-  models.py       immutable requests, execution/node/resource states
-  protocol.py     MQTT envelope validation and canonical payload hashing
+  models.py       request validation and canonical payload hashing
   repository.py   mc.sqlite3 migrations, ledger, events, fences and recovery
   mqtt.py         transport protocol, Paho adapter and deterministic fake
-  nodes.py        availability, boot/session/configuration readiness
-  scheduler.py    durable selection and global/per-node resource gates
-  service.py      fenced Core-facing application service
+  service.py      node readiness, fenced service, scheduler and resource gates
 src/mtos/mc_app.py
 tools/mtos_mc
-tests/test_mc_repository.py
-tests/test_mc_protocol.py
-tests/test_mc_scheduler.py
 tests/test_mc_service.py
 ```
 
@@ -100,18 +97,14 @@ class McService:
     def execution(self, execution_id: str) -> Execution: ...
     def cancel(self, execution_id: str) -> Execution: ...
     def reconcile(self, execution_id: str, resolution: Resolution) -> Execution: ...
-    def state(self) -> McState: ...
-    def nodes(self) -> tuple[NodeState, ...]: ...
-
-class McScheduler:
+    def snapshot(self) -> McState: ...
+    def nodes(self) -> list[NodeState]: ...
     def run_once(self) -> bool: ...
     def handle_event(self, event: NodeEvent) -> Execution: ...
-    def recover(self) -> None: ...
 
 class MqttTransport:
-    def connect(self) -> None: ...
     def publish(self, topic: str, payload: bytes, qos: int, retain: bool) -> int: ...
-    def disconnect(self) -> None: ...
+    def close(self) -> None: ...
 ```
 
 The production scheduler has exactly one owning thread. HTTP handlers and MQTT
@@ -126,11 +119,11 @@ All requests below are internal JSON calls from Core:
 | Method and path | Purpose |
 |---|---|
 | `GET /health` | Process liveness; never implies nodes are usable |
-| `GET /ready` | Core session valid, broker connected and scheduler running |
+| `GET /ready` | Core session valid and broker connected |
 | `GET /v1/state` | MC generation, broker state, servo gate and aggregate health |
 | `GET /v1/nodes` | Node availability/readiness projection |
-| `POST /v1/sessions` | Establish a higher fenced Core session |
-| `POST /v1/heartbeat` | Maintain the two-second Core heartbeat |
+| `POST /v1/core/session` | Establish a higher fenced Core session |
+| `POST /v1/core/heartbeat` | Maintain the two-second Core heartbeat |
 | `POST /v1/executions` | Durably accept one typed execution |
 | `GET /v1/executions/{execution_id}` | Return durable state and evidence |
 | `POST /v1/executions/{execution_id}/cancel` | Cancel only before dispatch; otherwise reconcile |
@@ -142,22 +135,25 @@ asset fencing token, node ID, operation, value/action and expiry. MC inserts it
 durably before acknowledging acceptance. Identical retries return the stored
 execution. Reuse of either immutable ID with another payload is rejected.
 
-MC rejects an old Core epoch/session, expired lease/command, lower asset fence,
-unsupported operation/value, unready node, boot/revision mismatch, duplicate
-physical mapping evidence, queue overflow or conflicting execution. Acceptance
-means durable admission only; it does not mean MQTT delivery or physical effect.
+MC admission rejects an old Core epoch/session, lower asset fence, unsupported
+operation/value, queue overflow, conflicting non-terminal execution or immutable
+ID reused with a different payload. An admitted execution remains queued until
+its node/session/configuration is ready; it expires rather than dispatching after
+its command deadline. Lease expiry and duplicate physical-output mappings are
+currently enforced by Asset/Core configuration workflow, not independently
+revalidated inside MC. Acceptance means durable admission only; it does not mean
+MQTT delivery or physical effect.
 
 ## Node identity and readiness
 
 A node is ready only when all of these are true:
 
 1. retained availability and a fresh status/heartbeat say it is online;
-2. node ID and unique MQTT client identity match its credentials;
+2. node identity is the ID carried by its ACL-constrained MQTT topic/credentials;
 3. a new random `boot_id` identifies the current firmware boot;
 4. firmware version is compatible;
 5. installed configuration revision matches the requested asset mapping;
 6. MC and the node have established the current `producer_session_id`;
-7. no unresolved execution from this or an earlier boot blocks the node.
 
 Availability alone never means ready. The default heartbeat interval is five
 seconds; status becomes stale after 15 seconds and offline on the Last Will or
@@ -165,8 +161,9 @@ connection evidence. These values are configurable but fixed per deployment and
 tested with a controllable clock.
 
 On startup or reconnect MC publishes no retained operation and replays no old
-physical command. It establishes a fresh producer session, queries/reconciles
-non-terminal evidence, and only then accepts new dispatch for that node.
+physical command. It establishes a fresh producer session. On MC restart,
+previously dispatched non-terminal work becomes `uncertain`; queued work remains
+queued. Matching later evidence or supervised reconciliation resolves uncertainty.
 
 ## MQTT contract
 
@@ -186,6 +183,11 @@ Offline broker queuing of command messages is disabled. A command targets the
 current node, `boot_id`, producer session and installed revision. QoS PUBACK is
 transport receipt only.
 
+The producer-session handshake supplies a current Unix-millisecond baseline.
+The node advances it with its monotonic clock when checking command expiry, so
+safe expiry does not depend on Internet/NTP availability. A rebooted node has no
+valid baseline and rejects commands until the fresh MC handshake arrives.
+
 Example logical command:
 
 ```json
@@ -198,15 +200,15 @@ Example logical command:
   "core_epoch": 7,
   "producer_session_id": "mc-session",
   "asset_id": "T012",
-  "asset_fence": 31,
+  "fencing_token": 31,
   "asset_revision": 4,
   "configuration_revision": 12,
   "node_id": "N001",
   "boot_id": "a4d31f76",
   "operation": "turnout.set",
   "value": "diverging",
-  "issued_at": "2026-09-18T12:30:00Z",
-  "expires_at": "2026-09-18T12:30:10Z"
+  "expires_at": "2026-09-18T12:30:10+00:00",
+  "expires_unix_ms": 1789734610000
 }
 ```
 
@@ -226,6 +228,12 @@ without repeating output; a duplicate ID with another hash is rejected. The node
 retains deduplication evidence for the full expiry/retry interval, not merely a
 fixed number of recent messages.
 
+That paragraph is the target protocol. The current host ledger implements durable
+idempotency, and firmware caches terminal outcomes for 60 seconds. Firmware does
+not yet cache/replay the state of an execution while it is active, so a QoS retry
+during movement can produce `busy` instead of replaying `accepted/started`. This
+must be corrected and tested before live actuation.
+
 ## Servo serialization
 
 There is exactly one global servo permit across every ESP32 node and every
@@ -241,10 +249,11 @@ different nodes is not used as concurrency control.
 6. MC releases the permit only on a known terminal outcome that proves the node
    output sequence ended.
 
-If contact is lost after dispatch, MC marks the execution `uncertain` and blocks
-the global servo permit. It does not assume that a timeout stopped the physical
-output and does not start another servo. Release requires matching node evidence
-after reconnect or explicit supervised reconciliation. The ESP32 also enforces a
+If a reboot is observed after dispatch, MC marks the execution `uncertain` and
+blocks the global servo permit. A dispatched servo already holds that permit, so
+mere contact loss cannot allow another servo to start. Automatic conversion of a
+stale, non-rebooted dispatch into explicit `uncertain` is still an implementation
+gap; supervised reconciliation remains required. The ESP32 also enforces a
 local monotonic movement watchdog and safe output-disable/reset wiring, but that
 local protection does not authorize MC to guess the result.
 
@@ -349,14 +358,16 @@ local monotonic time.
 
 ## HMI projection
 
-Core adds MC state to the existing HMI snapshot. HMI will show:
+Core adds MC state to the existing HMI snapshot. The current HMI shows:
 
 - broker and MC readiness;
-- each node as `unknown | online | stale | offline | error` plus installed revision;
-- asset desired, reported and observed state as separate values;
+- the selected asset's node identity/readiness;
 - job progress `queued | dispatched | accepted | started | completed` and explicit
   `rejected | failed | expired | cancelled | uncertain` outcomes;
-- disabled controls with the exact eligibility/readiness reason.
+- disabled accessory controls while the broker or selected node is not ready.
+
+Full per-node diagnostics, separate desired/reported/observed values and exact
+disabled-reason text remain UI refinements, not implemented claims.
 
 The HMI tabs cover Turnout, Signal and Machine but submit commands only to Core.
 Completion without a feedback sensor is labelled output-sequence completion, not
@@ -374,13 +385,28 @@ confirmed physical position or illumination.
    measuring its trigger circuit, full cycle timing and 12 V current.
 8. Commission one physical node before enabling multiple nodes.
 
-Automated tests cover duplicate/different payloads, old fences/sessions, stale
-nodes, out-of-order events, restart recovery, servo exclusion across two nodes,
-double-slip partial failure, signal changes during servo work, shared-register
-bit preservation, machine resource declaration, queue limits and buffer flashing.
-Hardware tests record firmware/config revisions, supply voltage/current, timing,
-watchdog/reset behavior and observed output. No automated test contacts a live
-broker or GPIO unless explicitly marked as a supervised integration test.
+Implementation source is under `src/mtos/mc`, with the Flask boundary in
+`src/mtos/mc_app.py`. The PlatformIO firmware project is under
+`firmware/esp32_node`. Live Paho/Mosquitto use is disabled unless
+`MTOS_MQTT_ENABLED=1`; default startup is deliberately broker-offline and safe
+for development without electronics.
+
+Automated host tests cover validation/hash stability, duplicate/different
+payloads, fences/sessions, event identity/order, Core-heartbeat staleness,
+firmware compatibility, restart recovery, global servo exclusion, per-node
+signal serialization, machine gating, handshake clock baseline and Core result
+reconciliation. Firmware source covers double-slip sequencing, signal image
+preservation, buffer flashing and water-tank timing, but PlatformIO compilation
+and hardware tests are pending. No automated test contacts a live broker or GPIO.
+
+The implemented repository enforces the 256 non-terminal capacity but does not
+yet prune terminal executions/events to the ADR-009 seven-day/10,000-record
+target. Live broker ACLs, offline-session policy and 20-message inflight behavior
+also remain commissioning checks. The current ESP32 `PubSubClient` publishes
+events/status at QoS 0 even though command delivery and the target event contract
+use QoS 1. The host also records dispatch after successful client enqueue but
+does not retain PUBACK evidence. A QoS-1-capable firmware publisher and explicit
+transport evidence are required before commissioning claims protocol compliance.
 
 ## Deliberately unresolved hardware facts
 

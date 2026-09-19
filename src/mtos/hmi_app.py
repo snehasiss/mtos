@@ -44,7 +44,11 @@ def create_hmi_app(config=None):
 
     @app.get("/")
     def index():
-        return send_from_directory(ui_root, "index.html")
+        response = send_from_directory(ui_root, "index.html")
+        # The HTML names content-hashed bundles.  Revalidate it so mobile
+        # browsers pick up a rebuilt UI instead of retaining an obsolete hash.
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
     @app.get("/control-ui/<path:name>")
     def control_ui(name):
@@ -81,16 +85,20 @@ def create_hmi_app(config=None):
         service.disconnect(request.sid)
 
     @socketio.on("control.snapshot.request")
-    def snapshot_request():
+    def snapshot_request(_payload=None):
         return service.snapshot()
 
     @socketio.on("roster.request")
-    def roster_request():
+    def roster_request(_payload=None):
         return {"items": service.locomotives()}
 
     @socketio.on("devices.request")
-    def devices_request():
+    def devices_request(_payload=None):
         return {"items": service.devices()}
+
+    @socketio.on("stationary.request")
+    def stationary_request(_payload=None):
+        return {"items": service.stationary()}
 
     @socketio.on("control.command")
     def command(value):

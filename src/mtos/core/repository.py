@@ -89,6 +89,22 @@ class CoreRepository:
                 (state, outcome, json.dumps(result) if result is not None else None, now(), command_id),
             )
 
+    def reconcile_mc(self, executions):
+        by_id = {item["execution_id"]: item for item in executions}
+        with self.connect() as db:
+            rows = db.execute("SELECT command_id,result FROM command WHERE state='accepted' AND result IS NOT NULL").fetchall()
+            for row in rows:
+                stored = json.loads(row["result"])
+                execution = by_id.get(stored.get("execution_id"))
+                if not execution:
+                    continue
+                state = execution["state"]
+                if state not in {"completed", "failed", "rejected", "expired", "cancelled", "uncertain"}:
+                    continue
+                canonical = "completed" if state == "completed" else "uncertain" if state == "uncertain" else "failed"
+                db.execute("UPDATE command SET state=?,outcome=?,result=?,updated_at=? WHERE command_id=?",
+                           (canonical, state, json.dumps(execution), now(), row["command_id"]))
+
     def reserve(self, asset_id, lease, revision, address):
         with self.connect() as db:
             row = db.execute("SELECT * FROM reservation WHERE asset_id=?", (asset_id,)).fetchone()

@@ -203,6 +203,14 @@ def test_asset_control_lease_is_atomic_renewable_and_protects_configuration(tmp_
     renewed = client.post("/internal/control-leases", headers=internal, json=request)
     assert renewed.json["leases"][0]["lease_id"] == first.json["leases"][0]["lease_id"]
     assert renewed.json["leases"][0]["fencing_token"] == 1
+    with roster.connect() as db:
+        db.execute(
+            "UPDATE asset_lease SET expires_at='2000-01-01T00:00:00+00:00' WHERE asset_id='L001'"
+        )
+    after_idle = client.post("/internal/control-leases", headers=internal, json=request)
+    assert after_idle.status_code == 200
+    assert after_idle.json["leases"][0]["lease_id"] == first.json["leases"][0]["lease_id"]
+    assert after_idle.json["leases"][0]["fencing_token"] == 1
     other = client.post(
         "/internal/control-leases", headers=internal,
         json={**request, "core_session_id": "core-2"},

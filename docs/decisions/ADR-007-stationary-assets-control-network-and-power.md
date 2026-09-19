@@ -10,6 +10,9 @@
 > [the mtos_mc low-level design](../architecture/mtos-mc-module.md). Where this
 > ADR's earlier producer terminology is ambiguous, `mtos_mc` is the MQTT producer
 > and execution owner while `mtos_core` remains operational authority.
+> ADR-009 also makes the software architecture host-independent. References below
+> to Cubietruck/A20 record the original power and deployment plan; “control host”
+> may now be a supported Raspberry Pi, Axon or another Linux SBC.
 
 - Status: Accepted; equipment currents require commissioning measurements
 - Date: 2026-09-07; revised 2026-09-14
@@ -24,11 +27,9 @@ design must run on modest hardware, preserve the direct DCC control path, avoid
 simultaneous servo inrush, and distinguish durable asset/configuration data
 from commands and observed operational state.
 
-The Cubietruck A20 (`SBC-A20`) is the physical control authority. The Vicharak
-Axon is reserved for SLM workloads used later for autonomous mainline operation
-or instruction-based yard operation. An Axon-generated plan is a request to the
-Cubietruck application; the Axon never bypasses validation or publishes
-hardware commands directly.
+The host running Core is the physical-control authority. An AI workload may run
+locally or on another computer, but its plan is only a request to Core; it never
+bypasses validation or publishes hardware commands directly.
 
 ## Decision
 
@@ -60,7 +61,7 @@ asset-number format. They must be globally collision-resistant.
 
 ### Data ownership
 
-SQLite on the Cubietruck is authoritative. Durable asset and configuration
+SQLite on the control host is authoritative. Durable asset and configuration
 data includes:
 
 - asset ID, type, description, location, and lifecycle;
@@ -179,11 +180,11 @@ signal map and per-chip current validation.
 
 The ESP32 stores the mapping from stable turnout/signal asset IDs to its local
 PCA9685 servo channels or 74HC595 aspect outputs. The mapping carries a
-configuration revision and is not inferred from MQTT topics. The Cubietruck
+configuration revision and is not inferred from MQTT topics. The control host
 publishes logical asset ID and desired state; a mismatched node configuration
 revision is rejected rather than operating an assumed channel.
 
-The ESP32 communicates with Mosquitto on the Cubietruck using MQTT over Wi-Fi.
+The ESP32 communicates with Mosquitto on the control host using MQTT over Wi-Fi.
 The ESP32-to-PCA9685 connection is a short local I2C bus. The ESP32-to-74HC595
 connection uses short local serial data, clock, and latch lines; cascaded register
 outputs select signal aspects. DHCP reservations may provide stable addresses for
@@ -193,13 +194,13 @@ addresses.
 The component and power connections are shown in
 [the asset-control connection diagram](../images/asset-control-connections.svg).
 
-Locomotive and track-power control remain on the dedicated Cubietruck-to-
+Locomotive and track-power control remain on the dedicated control-host-to-
 EX-CSB1 serial path. MQTT or Wi-Fi failure can make stationary accessories
 unavailable but must not interrupt that serial path.
 
 ## MQTT command protocol
 
-The baseline is MQTT 3.1.1 compatibility, Mosquitto on the Cubietruck, Paho in
+The baseline is MQTT 3.1.1 compatibility, Mosquitto on the control host, Paho in
 the producer, and an ESP32 MQTT client. MQTT shared subscriptions are not used:
 nodes are tied to physical loads and are not interchangeable workers.
 
@@ -266,7 +267,7 @@ unknown asset is rejected.
 ## Scheduling and failure recovery
 
 The single authoritative stationary-asset scheduler runs in the producer on
-the Cubietruck and persists its operation queue in SQLite. The initial global
+the control host and persists its operation queue in SQLite. The initial global
 resource limit is:
 
 ```text
@@ -302,7 +303,7 @@ After timeout, node loss, or restart, the producer does not automatically
 advance the sequence or replay an old movement. The route is interrupted,
 protecting signals remain at `stop`, the affected turnout becomes operationally
 unknown, and reconciliation or an explicit new command is required. A
-Cubietruck restart reconstructs interrupted operations from SQLite but does not
+Control-host restart reconstructs interrupted operations from SQLite but does not
 re-execute them automatically.
 
 ## Power architecture and budget

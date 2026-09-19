@@ -377,10 +377,11 @@ directory. Keep snapshots on a separate device.
 
 The service is `mtos_asset`, on port 5301. Its launcher is
 `tools/mtos_asset (start|stop|restart|status)`; `tools/asset_manager` is a
-compatibility alias for the same process. The separate `asset_control`
-service uses port 5302 and `tools/asset_control`. Phase 1 MAIN locomotive control
-was implemented after this asset-manager decision; this ADR still governs
-inventory ownership and does not define live operational state.
+compatibility alias for the same process. ADR-009 later decomposed operation:
+`mtos_hmi` uses port 5302, `mtos_core` uses 5303, `mtos_dcc` uses 5304 and
+`mtos_mc` uses 5305. `tools/asset_control` is now a compatibility alias for
+`mtos_hmi`. This ADR still governs inventory ownership and does not define live
+operational state.
 
 The Python domain is served through a Flask JSON API and an iPhone-first HTML
 interface. SQLite tables normalize asset, model, prototype, control, component,
@@ -398,7 +399,7 @@ Configuration editing records inventory information only; it does not program a
 decoder or actuate hardware.
 
 Asset management does not publish MQTT commands or model live railroad operation.
-Those concerns will receive separate decisions after the roster is complete.
+ADR-009 and the MC low-level design assign those concerns to Core and MC.
 
 ## Consequences
 

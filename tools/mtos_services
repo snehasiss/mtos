@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVICES = ("mtos_asset", "mtos_dcc", "mtos_core", "mtos_hmi")
+SERVICES = ("mtos_asset", "mtos_dcc", "mtos_mc", "mtos_core", "mtos_hmi")
 PROJECT_PYTHON = ROOT / ".venv" / "bin" / "python3"
 PYTHON = str(PROJECT_PYTHON) if PROJECT_PYTHON.is_file() else sys.executable
 
@@ -32,8 +32,8 @@ def initialize_core():
     )
     with urllib.request.urlopen(request, timeout=3) as response:
         result = json.load(response)
-    if not result.get("started") or not result.get("dcc_ready"):
-        raise RuntimeError("Core did not establish its DCC session")
+    if not result.get("started") or not result.get("dcc_ready") or not result.get("mc_ready"):
+        raise RuntimeError("Core did not establish DCC and MC sessions")
 
 
 def main():
@@ -56,7 +56,7 @@ def main():
         if run_service("mtos_hmi", "start"):
             raise RuntimeError("Unable to start mtos_hmi")
         started.append("mtos_hmi")
-        print("MTOS ready: Asset 5301, HMI 5302, Core 5303, DCC 5304")
+        print("MTOS ready: Asset 5301, HMI 5302, Core 5303, DCC 5304, MC 5305")
         return 0
     except Exception:
         for service in reversed(started):

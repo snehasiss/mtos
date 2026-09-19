@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5301)
     parser.add_argument(
         "--service",
-        choices=("mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core"),
+        choices=("mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core", "mtos_mc"),
         default="mtos_asset",
     )
     args = parser.parse_args()
@@ -38,6 +38,10 @@ if __name__ == "__main__":
         from mtos.core_app import create_core_app
 
         app = create_core_app()
+    elif args.service == "mtos_mc":
+        from mtos.mc_app import create_mc_app
+
+        app = create_mc_app()
     else:
         from mtos.asset_app import create_asset_app
 

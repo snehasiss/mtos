@@ -30,6 +30,11 @@ class FakeGateway:
         return [{"selection_id": "fake", "port": "/dev/fake", "description": "Fake",
                  "manufacturer": None, "vid": None, "pid": None, "serial_number": None}]
 
+    def stationary(self):
+        return [{"id": "T001", "family": "turnout", "type": "left",
+                 "label": None, "node_id": "N001", "revision": 1,
+                 "configuration_revision": 1, "actions": []}]
+
     def command(self, operation, payload, command_id):
         self.calls.append((operation, payload, command_id))
         return {"outcome": "confirmed", "operation": operation}
@@ -78,8 +83,13 @@ def test_hmi_http_and_request_events():
     assert b'id="root"' in http.get("/").data
     browser = socketio.test_client(app)
     browser.get_received()
-    assert browser.emit("roster.request", callback=True)["items"][0]["id"] == "L001"
-    assert browser.emit("devices.request", callback=True)["items"][0]["selection_id"] == "fake"
+    # socket.io-client sends an explicit null when the TypeScript acknowledgement
+    # helper is called without a payload. Flask-SocketIO passes that null as one
+    # positional argument, so each read handler must accept it.
+    assert browser.emit("control.snapshot.request", None, callback=True)["generation"] == "g1"
+    assert browser.emit("roster.request", None, callback=True)["items"][0]["id"] == "L001"
+    assert browser.emit("devices.request", None, callback=True)["items"][0]["selection_id"] == "fake"
+    assert browser.emit("stationary.request", None, callback=True)["items"][0]["id"] == "T001"
 
 
 def test_hmi_rejects_oversized_command():

@@ -39,12 +39,12 @@ After installation, verify:
 
 ```bash
 python3 -m pip check
-python3 -c 'import sqlite3, json, PIL, flask, waitress, serial; print("MTOS dependencies OK")'
+python3 -c 'import sqlite3, json, PIL, flask, waitress, serial, paho.mqtt.client; print("MTOS dependencies OK")'
 ```
 
 These version ranges are not a platform-tested lockfile. The current application
-has not yet been commissioned on the A20. PySerial is included for Phase 1 CSB1
-control; MQTT dependencies are deferred to the accessory checkpoint.
+has not yet been commissioned on the A20. PySerial supports CSB1 control and
+Paho MQTT supports the implemented MC adapter; live MQTT is off by default.
 
 Default bind: `0.0.0.0:5301` (all IPv4 interfaces). For an iPhone on the same trusted LAN:
 
@@ -66,8 +66,8 @@ same `mtos_asset` lock, PID metadata and process, so they cannot start duplicate
 
 `data/db/asset.sqlite3` and `data/media/<family>/<asset_id>_n.jpg` are ignored by
 Git. `MTOS_DATA_DIR=/path/to/data` configures another root for service and utilities.
-Service-owned persistence uses `asset.sqlite3`, `core.sqlite3`, and, once MC is
-implemented, `mc.sqlite3`. DCC and HMI are stateless and have no database. The
+Service-owned persistence uses `asset.sqlite3`, `core.sqlite3`, and
+`mc.sqlite3`. DCC and HMI are stateless and have no database. The
 backup utility includes Core and MC databases when present; Asset and media are
 always required.
 Schema version 5 is initialized/upgraded automatically; SQL is in `src/mtos/migrations`.
@@ -116,7 +116,7 @@ preserves subsequent edits and fresh migration applies the confirmed corrections
 `tools/mtos_hmi (start|stop|restart|status)` operates the browser-facing HMI on
 `0.0.0.0:5302`; `tools/asset_control` is a compatibility alias for that same
 process. HMI opens no serial hardware and uses Socket.IO to submit typed intent to
-Core. Stop Asset and control services before restore or upgrade operations.
+Core. Stop the complete MTOS service stack before restore or upgrade operations.
 
 ## Manual backups and restoration
 

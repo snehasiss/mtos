@@ -9,7 +9,7 @@ import os
 from flask import Flask, abort, jsonify, request
 from werkzeug.exceptions import HTTPException
 
-from .core.clients import AssetClient, DccClient, ServiceError
+from .core.clients import AssetClient, DccClient, McClient, ServiceError
 from .core.service import CoreConflict, CoreService
 from .roster import data_root
 
@@ -22,6 +22,7 @@ def create_core_app(config=None):
         app.config.get("DATA_ROOT", data_root()),
         AssetClient(app.config.get("ASSET_URL", "http://127.0.0.1:5301"), app.config["INTERNAL_TOKEN"]),
         DccClient(app.config.get("DCC_URL", "http://127.0.0.1:5304"), app.config["INTERNAL_TOKEN"]),
+        McClient(app.config.get("MC_URL", "http://127.0.0.1:5305"), app.config["INTERNAL_TOKEN"]),
     )
     app.extensions["core_service"] = service
     atexit.register(service.close)
@@ -84,6 +85,10 @@ def create_core_app(config=None):
     @app.get("/v1/hmi/devices")
     def hmi_devices():
         return jsonify(items=service.hmi_devices())
+
+    @app.get("/v1/hmi/stationary")
+    def hmi_stationary():
+        return jsonify(items=service.hmi_stationary())
 
     @app.post("/v1/hmi/commands")
     def hmi_command():

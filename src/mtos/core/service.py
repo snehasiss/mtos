@@ -13,15 +13,17 @@ class CoreConflict(RuntimeError):
 
 
 class CoreService:
-    def __init__(self, data_root, asset_client, dcc_client, *, session_id=None, epoch=None,
+    def __init__(self, data_root, asset_client, dcc_client, mc_client=None, *, session_id=None, epoch=None,
                  heartbeat_interval=2.0):
         self.repository = CoreRepository(data_root)
         self.asset = asset_client
         self.dcc = dcc_client
+        self.mc = mc_client
         self.session_id = session_id or str(uuid.uuid4())
         self.epoch = self.repository.next_epoch() if epoch is None else epoch
         self.started = False
         self.dcc_ready = False
+        self.mc_ready = False
         self.last_error = None
         self.emergency_latched = False
         self._lock = threading.RLock()
@@ -31,8 +33,11 @@ class CoreService:
 
     def start(self):
         self.dcc.session(self.session_id, self.epoch)
+        if self.mc:
+            self.mc.session(self.session_id, self.epoch)
         self.started = True
         self.dcc_ready = True
+        self.mc_ready = self.mc is not None
         self.last_error = None
         if self._heartbeat_interval is not None and not self._heartbeat_thread:
             self._heartbeat_thread = threading.Thread(
@@ -44,23 +49,28 @@ class CoreService:
     def heartbeat(self):
         self._require_started()
         result = self.dcc.heartbeat(self.session_id, self.epoch)
+        if self.mc:
+            self.mc.heartbeat(self.session_id, self.epoch)
+            self.repository.reconcile_mc(self.mc.state().get("executions", []))
         self.dcc_ready = True
         self.last_error = None
         return result
 
     def snapshot(self):
         return {"session_id": self.session_id, "epoch": self.epoch,
-                "started": self.started, "dcc_ready": self.dcc_ready,
+                "started": self.started, "dcc_ready": self.dcc_ready, "mc_ready": self.mc_ready,
                 "last_error": self.last_error,
                 "emergency_latched": self.emergency_latched}
 
     def hmi_snapshot(self):
         self._require_started()
         dcc = self.dcc.state()
+        mc = self.mc.state() if self.mc else {"broker": "offline", "nodes": [], "servo_gate": None, "machine_gate": None}
         return {
             "generation": f"{self.session_id}:{self.epoch}",
             "emergency_latched": self.emergency_latched,
             "device": dcc["device"],
+            "mc": mc,
         }
 
     def hmi_locomotives(self):
@@ -68,6 +78,9 @@ class CoreService:
 
     def hmi_devices(self):
         return self.dcc.devices()
+
+    def hmi_stationary(self):
+        return self.asset.stationary()
 
     def hmi_command(self, operation, payload, command_id):
         if operation == "device.connect":
@@ -86,7 +99,55 @@ class CoreService:
             return self.emergency_stop(command_id)
         if operation == "resume":
             return self.resume()
+        if operation in {"turnout.set", "signal.set", "machine.execute"}:
+            return self.stationary(operation, payload.get("asset_id"), payload.get("value"), command_id)
         raise ValueError(f"Unsupported HMI operation: {operation}")
+
+    def stationary(self, operation, asset_id, value, command_id=None):
+        self._require_started()
+        if not self.mc:
+            raise CoreConflict("MC service is unavailable")
+        asset = self.asset.get(asset_id)
+        expected_family = {"turnout.set": "turnout", "signal.set": "signal", "machine.execute": "machine"}[operation]
+        life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+        if asset.get("family") != expected_family:
+            raise CoreConflict(f"Asset is not a {expected_family}")
+        if life.get("possession") != "received" or life.get("status") != "active":
+            raise CoreConflict("Stationary asset must be received and active")
+        node_id = control.get("node_id")
+        if not isinstance(node_id, str) or not node_id:
+            raise CoreConflict("Stationary asset requires a control node")
+        if operation == "turnout.set" and value not in {"straight", "diverging"}:
+            raise ValueError("turnout state must be straight or diverging")
+        if operation == "signal.set":
+            allowed = {"stop", "go"} if asset.get("type", "").endswith("2a") else {"stop", "slow", "go"}
+            if value not in allowed: raise ValueError("unsupported signal aspect")
+        if operation == "machine.execute" and value not in control.get("actions", ["operate"]):
+            raise ValueError("unsupported machine action")
+        journal = {"value": value}
+        replay = self._existing(command_id, operation, asset_id, journal)
+        if replay: return replay
+        lease = self.asset.acquire_lease(asset_id, asset["revision"], self.session_id, self.epoch, operation)
+        resources = [] if operation == "signal.set" else ["servo"] if operation == "turnout.set" else list(control.get("resources") or ["machine"])
+        cid = command_id or str(uuid.uuid4())
+        execution_id = str(uuid.uuid4())
+        self.repository.begin(cid, operation, journal, asset_id)
+        from datetime import UTC, datetime, timedelta
+        envelope = {"command_id": cid, "execution_id": execution_id,
+                    "core_session_id": self.session_id, "core_epoch": self.epoch,
+                    "asset_id": asset_id, "asset_revision": asset["revision"],
+                    "configuration_revision": control.get("configuration_revision", asset["revision"]),
+                    "lease_id": lease["lease_id"], "fencing_token": lease["fencing_token"],
+                    "node_id": node_id, "operation": operation, "value": value,
+                    "resources": resources,
+                    "expires_at": (datetime.now(UTC) + timedelta(seconds=10)).isoformat()}
+        try:
+            result = self.mc.submit(envelope)
+            self.repository.finish(cid, "accepted", result.get("state"), result)
+            return {"command_id": cid, "execution_id": execution_id, **result}
+        except Exception:
+            self.repository.finish(cid, "uncertain")
+            raise
 
     def device_connect(self, selection_id, command_id=None):
         self._require_started()
@@ -187,6 +248,7 @@ class CoreService:
                 self.heartbeat()
             except Exception as error:
                 self.dcc_ready = False
+                self.mc_ready = False
                 self.last_error = str(error)
 
     def _operating_locomotive(self, asset_id, purpose):
@@ -231,6 +293,9 @@ class CoreService:
         row = self.repository.existing(command_id, operation, payload, asset_id)
         if not row:
             return None
+        if row["state"] != "completed" and row.get("result"):
+            import json
+            return {"command_id": command_id, **json.loads(row["result"]), "replayed": True}
         return {"command_id": command_id, **self._stored_result(row), "replayed": True}
 
     @staticmethod

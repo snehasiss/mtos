@@ -60,6 +60,26 @@ class FakeDcc:
         return [{"selection_id": "fake", "port": "/dev/fake", "description": "Fake"}]
 
 
+class FakeMc:
+    def __init__(self): self.calls = []; self.executions = []
+    def session(self, session_id, epoch): self.calls.append(("session", session_id, epoch)); return {"stale": False}
+    def heartbeat(self, session_id, epoch): self.calls.append(("heartbeat", session_id, epoch)); return {"stale": False}
+    def state(self): return {"broker": "connected", "nodes": [{"node_id": "N001", "ready": True}], "servo_gate": None, "machine_gate": None, "executions": self.executions}
+    def submit(self, envelope): self.calls.append(("submit", envelope)); return {"state": "queued", "execution_id": envelope["execution_id"]}
+
+
+class FakeStationaryAsset(FakeAsset):
+    def __init__(self):
+        super().__init__()
+        self.asset = {"id": "T001", "revision": 5, "family": "turnout", "type": "left",
+                      "lifecycle": {"possession": "received", "status": "active", "location": "yard_south_1"},
+                      "control": {"node_id": "N001", "configuration_revision": 8}}
+    def get(self, asset_id): return self.asset
+    def acquire_lease(self, asset_id, revision, session_id, epoch, purpose):
+        self.fence += 1; return {"lease_id": f"lease-{self.fence}", "fencing_token": self.fence}
+    def stationary(self): return [{"id": "T001", "family": "turnout", "type": "left", "node_id": "N001"}]
+
+
 def make_service(tmp_path):
     return CoreService(
         tmp_path / "data", FakeAsset(), FakeDcc(), session_id="core-1", epoch=3,
@@ -127,3 +147,25 @@ def test_core_epoch_increases_across_service_restart(tmp_path):
         heartbeat_interval=None,
     )
     assert second.epoch == first.epoch + 1
+
+
+def test_core_routes_stationary_intent_to_mc_with_lease_and_resource(tmp_path):
+    mc = FakeMc()
+    service = CoreService(tmp_path / "data", FakeStationaryAsset(), FakeDcc(), mc,
+                          session_id="core-1", epoch=3, heartbeat_interval=None)
+    service.start()
+    result = service.stationary("turnout.set", "T001", "diverging", "turnout-command")
+    assert result["state"] == "queued"
+    sent = mc.calls[-1][1]
+    assert sent["node_id"] == "N001" and sent["resources"] == ["servo"]
+    assert sent["configuration_revision"] == 8 and sent["fencing_token"] == 1
+    replay = service.stationary("turnout.set", "T001", "diverging", "turnout-command")
+    assert replay["replayed"] is True
+    assert len([call for call in mc.calls if call[0] == "submit"]) == 1
+    assert service.hmi_snapshot()["mc"]["broker"] == "connected"
+    mc.executions = [{"execution_id": result["execution_id"], "asset_id": "T001",
+                      "operation": "turnout.set", "state": "completed", "result": {}}]
+    service.heartbeat()
+    with service.repository.connect() as database:
+        row = database.execute("SELECT state,outcome FROM command WHERE command_id='turnout-command'").fetchone()
+    assert tuple(row) == ("completed", "completed")

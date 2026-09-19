@@ -15,6 +15,9 @@ class CoreGateway(JsonClient):
     def devices(self):
         return self.request("GET", "/v1/hmi/devices")["items"]
 
+    def stationary(self):
+        return self.request("GET", "/v1/hmi/stationary")["items"]
+
     def command(self, operation, payload, command_id):
         return self.request(
             "POST", "/v1/hmi/commands",

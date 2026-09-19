@@ -57,6 +57,26 @@ class DccClient(JsonClient):
         return self.request("GET", "/v1/devices")["items"]
 
 
+class McClient(JsonClient):
+    def session(self, session_id, epoch):
+        return self.request("POST", "/v1/core/session", {"session_id": session_id, "epoch": epoch})
+
+    def heartbeat(self, session_id, epoch):
+        return self.request("POST", "/v1/core/heartbeat", {"session_id": session_id, "epoch": epoch})
+
+    def state(self):
+        return self.request("GET", "/v1/state")
+
+    def nodes(self):
+        return self.request("GET", "/v1/nodes")["items"]
+
+    def submit(self, envelope):
+        return self.request("POST", "/v1/executions", envelope)
+
+    def execution(self, execution_id):
+        return self.request("GET", f"/v1/executions/{execution_id}")
+
+
 class AssetClient(JsonClient):
     def get(self, asset_id):
         return self.request("GET", f"/api/assets/{asset_id}")
@@ -71,3 +91,6 @@ class AssetClient(JsonClient):
 
     def locomotives(self):
         return self.request("GET", "/internal/operating-locomotives")["items"]
+
+    def stationary(self):
+        return self.request("GET", "/internal/operating-stationary-assets")["items"]

@@ -1,6 +1,6 @@
 # mtos_hmi module checkpoint
 
-Date: 2026-09-18. Status: integrated for Phase 1 DCC MAIN operation.
+Date: 2026-09-18. Status: integrated for DCC MAIN and the hardware-free MC path.
 
 `mtos_hmi` is the browser-facing human-machine interface on `0.0.0.0:5302`.
 It serves the compiled React/TypeScript interface and owns browser sessions,
@@ -17,7 +17,8 @@ Version 1 boundaries are enforced:
 - at most eight browser sessions;
 - at most 32 outstanding commands per browser;
 - 16 KiB command and 64 KiB Socket.IO transport limit;
-- 1,024-event in-memory replay boundary;
+- 1,024-event in-memory history boundary; reconnect replay/resynchronization is
+  still incomplete;
 - increasing client sequence per session;
 - same-origin browser connection and loopback Core client.
 
@@ -29,8 +30,10 @@ The React UI retains the accepted iPhone-first throttle/function presentation.
 Its API adapter now uses `socket.io-client`; no one-second status timer remains.
 The production bundle is rebuilt under `src/mtos/control_ui`.
 
-Core now supplies the HMI snapshot, active-locomotive roster, serial-device list
-and typed command gateway. HMI pushes changed Core/device state to connected
-browsers. The same HMI service will later present CV and microcontroller-backed
-turnout, signal and machine controls, but those screens and `mtos_mc` do not yet
-exist; current operational coverage is DCC MAIN only.
+Core now supplies the HMI snapshot, active-locomotive roster, stationary-asset
+roster, device state and typed command gateway. HMI pushes changed Core/device
+state to connected browsers. Turnout, signal and machine tabs route typed
+commands through Core to `mtos_mc`; they remain disabled unless MQTT is connected
+and the selected node reports a compatible, configuration-matched ready state.
+This path is covered by fake-transport tests but is not hardware-commissioned.
+CV/PROG remains deferred.

@@ -1,6 +1,6 @@
 # mtos_core module checkpoint
 
-Date: 2026-09-18. Status: implemented and integrated for Phase 1 DCC operation.
+Date: 2026-09-18. Status: implemented for DCC MAIN and the hardware-free MC path.
 
 `mtos_core` is the sole operational authority on `127.0.0.1:5303`. It owns a
 separate `data/db/core.sqlite3` journal and reservation projection. It does not
@@ -18,12 +18,19 @@ For locomotive commands Core:
 Repeated `command_id` with an identical command returns the stored result and
 does not execute hardware again. Reuse for another payload is rejected. Emergency
 stop latches Core and blocks movement/function commands until explicit resume.
-Core establishes the DCC session and sends two-second heartbeats in a background
-thread; readiness becomes false if heartbeat delivery fails.
+Core establishes DCC and MC sessions and sends two-second heartbeats in a
+background thread; readiness becomes false if heartbeat delivery fails.
 
-The internal API currently exposes start/readiness/state, heartbeat, MAIN power,
-throttle, functions, locomotive stop, emergency stop and resume. It requires the
-internal token and has no browser UI.
+For stationary assets Core validates family, lifecycle and operation-specific
+values, acquires the Asset lease/fence, records the canonical transaction, then
+submits a typed execution to MC. MC results are reconciled into the Core journal;
+Core remains the operational authority while `mc.sqlite3` remains subordinate
+hardware-execution evidence.
+
+The internal API exposes start/readiness/state, heartbeat, MAIN power, throttle,
+functions, locomotive stop, emergency stop, resume, stationary-asset lists and
+typed turnout/signal/machine commands. It requires the internal token and has no
+browser UI.
 
 Run it with:
 
@@ -36,5 +43,5 @@ tools/mtos_core stop
 The Asset control-lease endpoint and HMI projection are implemented. A durable
 Core epoch permits a newly started Core session to supersede its own stale lease
 while producing a higher per-asset fence for DCC. The integrated startup tool
-establishes the DCC session before HMI is exposed as ready. Real EX-CSB1 hardware
-commissioning has not yet been performed.
+establishes both adapter sessions before HMI is exposed as ready. Real EX-CSB1
+and ESP32/electronics commissioning has not yet been performed.

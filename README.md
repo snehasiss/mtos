@@ -28,8 +28,14 @@ domain rather than assumptions embedded in it.
 
 The asset-management application and the Phase 1 DCC control path run on Python,
 Flask and SQLite with iPhone-first browser interfaces. `mtos_hmi`, `mtos_core`
-and `mtos_dcc` are integrated; real EX-CSB1 commissioning and the future
-`mtos_mc` accessory service remain pending.
+and `mtos_dcc` are integrated. `mtos_mc`, its Core/HMI path and ESP32 firmware
+source are implemented against fakes; real EX-CSB1 and accessory electronics
+commissioning remain pending.
+
+Current limitations are explicit: CV/PROG, occupancy, routes, interlocking,
+autonomy, systemd deployment, history pruning and physical EX-CSB1/ESP32
+commissioning are not complete. Accessory controls stay disabled while MQTT or
+the selected node is not ready.
 
 ## Run mtos_asset
 
@@ -72,7 +78,7 @@ same launcher syntax. Use this only on a trusted local network.
 `tools/asset_control` remains a compatibility alias for `mtos_hmi`. The browser
 is written in React and TypeScript and compiled by Vite.
 Flask serves the committed production bundle, so Node.js is not required on the
-Cubietruck at runtime. Frontend developers need Node.js and pnpm; after changing
+deployment host at runtime. Frontend developers need Node.js and pnpm; after changing
 `frontend/asset_control/`, rebuild the bundle with:
 
 ```bash
@@ -84,9 +90,9 @@ must be updated together with their React source.
 
 Current design material is under [`docs/`](docs/README.md).
 
-The stack coordinator starts Asset, DCC and Core, establishes the fenced
-Core–DCC session, and starts HMI only after Core is ready. It stops them in the
-reverse order:
+The stack coordinator starts Asset, DCC, MC and Core, establishes fenced
+Core–DCC and Core–MC sessions, and starts HMI only after Core is ready. It stops
+them in reverse order:
 
 ```bash
 tools/mtos_services status
@@ -94,13 +100,13 @@ tools/mtos_services restart
 tools/mtos_services stop
 ```
 
-Asset and HMI listen on the trusted LAN. Core and DCC remain loopback-only on
-ports 5303 and 5304. HMI uses Socket.IO and calls Core only; Core validates
-Asset data and is the sole service allowed to command DCC. See the
+Asset and HMI listen on the trusted LAN. Core, DCC and MC remain loopback-only on
+ports 5303, 5304 and 5305. HMI uses Socket.IO and calls Core only; Core validates
+Asset data and is the sole service allowed to command DCC or MC. See the
 [startup and shutdown guide](docs/operations/service-startup.md).
 
 For development/tests, install `python3 -m pip install -e '.[dev]'` as well.
-Cubietruck deployment uses system Python 3.11 or newer, without `.venv`.
+SBC deployment may use system Python 3.11 or newer, without `.venv`.
 A development virtual environment is optional. See the roster guide for
 deployment checks and OS-managed Python installation constraints.
 

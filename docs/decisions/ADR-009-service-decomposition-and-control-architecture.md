@@ -44,9 +44,24 @@ Implementation checkpoint (2026-09-18): the Phase 1 path comprising
 `mtos_asset`, `mtos_dcc`, `mtos_core` and `mtos_hmi` is integrated. The
 coordinator and operational sequence are documented in
 [Integrated service startup and shutdown](../operations/service-startup.md).
-This checkpoint does not implement `mtos_mc`, CV/PROG or autonomous operation.
-The approved MC implementation contract is recorded separately in
-[mtos_mc scope and low-level design](../architecture/mtos-mc-module.md).
+At the original decision checkpoint `mtos_mc`, CV/PROG and autonomous operation
+were not implemented. The approved MC contract is recorded in
+[mtos_mc scope and low-level design](../architecture/mtos-mc-module.md). The host
+service, Core/HMI integration, fake MQTT transport and initial ESP32 firmware
+now implement that contract; physical commissioning, CV/PROG and autonomous
+operation remain pending.
+
+Implementation status is intentionally narrower than every Version 1 target in
+this ADR. The five normal service processes, loopback boundaries, Asset leases
+and fences, DCC watchdog, Core/MC command identity, MC scheduler, Socket.IO HMI
+and fake-hardware tests exist. Systemd units, periodic lease renewal/release,
+the emergency-only HMI-to-DCC bypass, terminal-history pruning, sustained-load
+qualification and physical hardware commissioning do not yet exist. Sections
+below remain normative target behavior unless a later ADR changes them; they
+must not be read as claims that every item is already implemented.
+The initial ESP32 source also lacks active-execution duplicate replay and uses a
+QoS-0-only publish path for node events; both must be resolved before MC hardware
+commissioning against this ADR's QoS 1 contract.
 
 ### Named services
 
@@ -435,7 +450,9 @@ requests. HTTP remains a diagnostic and compatibility mechanism.
    with acknowledged Socket.IO snapshots and events.
 6. Add systemd supervision, loopback binding and integration tests.
 7. Commission CSB1 MAIN under explicit operator supervision.
-8. Implement `mtos_mc`, Mosquitto integration and the first complete ESP32 node.
+8. Implement `mtos_mc`, its Mosquitto adapter and the first ESP32-node firmware.
+   Code and hardware-free tests are complete; broker and physical-node
+   commissioning await the electronics.
 9. Add PROG/CV workflows through Core and DCC with durable address-change recovery.
 10. Add `mtos_ai` only after occupancy, route reservation and interlocking
     contracts are implemented and tested.

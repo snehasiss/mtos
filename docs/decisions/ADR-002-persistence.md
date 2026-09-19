@@ -1,6 +1,6 @@
 # ADR-002: Embedded transactional persistence
 
-- **Status:** Accepted
+- **Status:** Accepted; persistence ownership amended by ADR-009
 - **Date:** 2026-09-06
 
 ## Context
@@ -12,10 +12,13 @@ transaction records while remaining suitable for a small SBC.
 
 ## Decision
 
-Use one embedded SQLite database as the authoritative live store for an MTOS
-installation.
+Use embedded SQLite as the authoritative live persistence technology for an
+MTOS installation. ADR-009 subsequently split runtime ownership by service, so
+this no longer means one shared database file or cross-service SQL access.
 
-The Asset database is `data/db/asset.sqlite3`; photos are in `data/media`.
+Asset owns `data/db/asset.sqlite3`, Core owns `data/db/core.sqlite3`, and MC owns
+bounded adapter evidence in `data/db/mc.sqlite3`. DCC and HMI have no Version 1
+database. Photos are in `data/media`.
 Both are excluded from Git. `MTOS_DATA_DIR` configures another live data root.
 Manual `tools/mtos_backup --remote PATH --backup` snapshots the database and media together;
 there is no installed backup schedule. See `docs/operations/roster.md`.
@@ -28,8 +31,10 @@ there is no installed backup schedule. See `docs/operations/roster.md`.
 - Schema changes are versioned migrations committed to the repository.
 - JSON remains an import, export, fixture, API, and human-readable snapshot
   format, but is not the live transactional authority.
-- The asset-management application boundary owns persistent asset writes.
-  Hardware adapters do not independently edit the database.
+- Each state-owning service writes only its own database. Asset alone writes
+  asset master/lifecycle/configuration data; Core alone writes canonical
+  operational transactions; MC writes only subordinate execution evidence.
+  Services communicate through versioned contracts, never cross-database SQL.
 
 ## Transaction boundary
 

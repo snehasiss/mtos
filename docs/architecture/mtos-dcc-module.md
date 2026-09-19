@@ -16,7 +16,9 @@ The normal admission limit is 64 commands. Emergency stop bypasses that limit.
 The internal JSON API includes health/readiness/state, serial-device discovery,
 connect/disconnect, Core session/heartbeat, MAIN power, throttle, function,
 locomotive stop and all-stop. Mutations require `X-MTOS-Internal-Token`.
-The service is loopback-only by default and starts disconnected and de-energized.
+The service is loopback-only by default and starts disconnected. It sends no
+power-on command, but reports physical MAIN power as `unknown` until verified;
+software startup cannot claim that externally powered hardware is de-energized.
 
 Run it with:
 

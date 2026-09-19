@@ -27,6 +27,13 @@ export type ControlSnapshot = {
   generation: string;
   emergency_latched: boolean;
   device: DeviceState;
+  mc: {
+    broker: "connected" | "offline";
+    servo_gate: string | null;
+    machine_gate: string | null;
+    nodes: Array<{node_id: string; availability: string; ready: boolean; configuration_revision: number | null}>;
+    executions: Array<{execution_id: string; asset_id: string; state: string; operation: string; result: Record<string, unknown> | null}>;
+  };
 };
 
 export type SessionSnapshot = ControlSnapshot & {csrf: string};
@@ -47,4 +54,15 @@ export type SerialDevice = {
   vid: number | null;
   pid: number | null;
   serial_number: string | null;
+};
+
+export type StationaryAsset = {
+  id: string;
+  family: "turnout" | "signal" | "machine";
+  type: string;
+  label: string | null;
+  node_id: string;
+  revision: number;
+  configuration_revision: number;
+  actions: string[];
 };

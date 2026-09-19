@@ -5,6 +5,7 @@ import type {
   Direction,
   RosterLocomotive,
   SerialDevice,
+  StationaryAsset,
 } from "./types";
 
 const initialSnapshot: ControlSnapshot = {
@@ -22,6 +23,7 @@ const initialSnapshot: ControlSnapshot = {
     error: null,
     locomotives: {},
   },
+  mc: {broker: "offline", servo_gate: null, machine_gate: null, nodes: [], executions: []},
 };
 
 type PickerItem = {value: string; label: string};
@@ -92,6 +94,9 @@ export default function App() {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [roster, setRoster] = useState<RosterLocomotive[]>([]);
   const [devices, setDevices] = useState<SerialDevice[]>([]);
+  const [stationary, setStationary] = useState<StationaryAsset[]>([]);
+  const [area, setArea] = useState<"operation" | "turnout" | "signal" | "machine">("operation");
+  const [selectedStationary, setSelectedStationary] = useState("");
   const [selectedAsset, setSelectedAsset] = useState("");
   const [selectedDevice, setSelectedDevice] = useState("");
   const [direction, setDirection] = useState<Direction>("forward");
@@ -116,15 +121,24 @@ export default function App() {
     async function load() {
       try {
         const session = await api.session();
-        const [locomotives, serialDevices] = await Promise.all([
-          api.locomotives(), api.devices(),
+        const [locomotives, serialDevices, stationaryAssets] = await Promise.allSettled([
+          api.locomotives(), api.devices(), api.stationary(),
         ]);
         if (!active) return;
         setSnapshot(session);
-        setRoster(locomotives.items);
-        setDevices(serialDevices.items);
-        if (locomotives.items.length === 1) setSelectedAsset(locomotives.items[0].id);
-        if (serialDevices.items.length === 1) setSelectedDevice(serialDevices.items[0].selection_id);
+        if (locomotives.status === "fulfilled") {
+          setRoster(locomotives.value.items);
+          if (locomotives.value.items.length === 1) setSelectedAsset(locomotives.value.items[0].id);
+        }
+        if (serialDevices.status === "fulfilled") {
+          setDevices(serialDevices.value.items);
+          if (serialDevices.value.items.length === 1) setSelectedDevice(serialDevices.value.items[0].selection_id);
+        }
+        if (stationaryAssets.status === "fulfilled") setStationary(stationaryAssets.value.items);
+        const failed = [locomotives, serialDevices, stationaryAssets].find(
+          (result): result is PromiseRejectedResult => result.status === "rejected",
+        );
+        setMessage(failed ? (failed.reason instanceof Error ? failed.reason.message : "Unable to load controls") : null);
       } catch (error) {
         if (active) setMessage(error instanceof Error ? error.message : "Unable to load controls");
       } finally {
@@ -240,6 +254,17 @@ export default function App() {
   })), [devices]);
   const firstFunction = functionPage * 16;
   const lastFunction = Math.min(firstFunction + 15, 68);
+  const familyAssets = stationary.filter((item) => item.family === area);
+  const selectedAccessory = familyAssets.find((item) => item.id === selectedStationary);
+  const selectedNode = snapshot.mc.nodes.find((node) => node.node_id === selectedAccessory?.node_id);
+  const accessoryReady = snapshot.mc.broker === "connected" && selectedNode?.ready === true;
+  const latestAccessoryExecution = snapshot.mc.executions.find((item) => item.asset_id === selectedStationary);
+
+  useEffect(() => {
+    if (area === "operation") return;
+    const items = stationary.filter((item) => item.family === area);
+    setSelectedStationary(items.length === 1 ? items[0].id : "");
+  }, [area, stationary]);
 
   return (
     <main className="shell">
@@ -270,7 +295,7 @@ export default function App() {
 
       {message && <p className="message" role="alert">{message}</p>}
 
-      <section className="panel device-panel" aria-label="EX-CSB1 command station">
+      {area === "operation" && <section className="panel device-panel" aria-label="EX-CSB1 command station">
         <div className="row">
           <div><h2>EX-CSB1</h2><span className="device-kind">USB · serial command station</span></div>
           <span className={`pill ${snapshot.device.connection === "error" ? "error" : ""}`}>
@@ -304,14 +329,37 @@ export default function App() {
             disabled={ready || lifecycle !== null} onChange={setSelectedDevice} />
           <p>{snapshot.device.identity || snapshot.device.error || "No verified identity"}</p>
         </details>
-      </section>
+      </section>}
 
       <nav className="tabs" aria-label="Control area">
-        <button className="current" aria-current="page">Operation</button>
+        <button className={area === "operation" ? "current" : ""} aria-current={area === "operation" ? "page" : undefined} onClick={() => setArea("operation")}>Operation</button>
         <button disabled>Programming</button>
+        <button className={area === "turnout" ? "current" : ""} onClick={() => setArea("turnout")}>Turnout</button>
+        <button className={area === "signal" ? "current" : ""} onClick={() => setArea("signal")}>Signal</button>
+        <button className={area === "machine" ? "current" : ""} onClick={() => setArea("machine")}>Machine</button>
       </nav>
 
-      <section className="panel roster-panel">
+      {area !== "operation" && (
+        <section className="panel accessory-panel">
+          <div className="row">
+            <h2>{area[0].toUpperCase() + area.slice(1)}</h2>
+            <span className={`pill ${accessoryReady ? "" : "error"}`}>{accessoryReady ? "ready" : snapshot.mc.broker}</span>
+          </div>
+          <Picker label={`Active ${area}`} items={familyAssets.map((item) => ({value: item.id, label: item.label || `${item.id} · ${item.type}`}))}
+            value={selectedStationary} placeholder={familyAssets.length ? `Select ${area}` : `No active ${area}s`}
+            onChange={setSelectedStationary} />
+          {selectedAccessory && <small>{selectedAccessory.id} · {selectedAccessory.node_id} · {selectedAccessory.type}</small>}
+          {latestAccessoryExecution && <p className="notice">{latestAccessoryExecution.operation}: {latestAccessoryExecution.state}</p>}
+          <div className="state-actions">
+            {area === "turnout" && <><button disabled={!accessoryReady} onClick={() => run(() => api.turnout(selectedStationary, "straight"))}>Straight</button><button disabled={!accessoryReady} onClick={() => run(() => api.turnout(selectedStationary, "diverging"))}>Diverging</button></>}
+            {area === "signal" && <><button disabled={!accessoryReady} onClick={() => run(() => api.signal(selectedStationary, "stop"))}>Stop</button>{selectedAccessory?.type.endsWith("3a") && <button disabled={!accessoryReady} onClick={() => run(() => api.signal(selectedStationary, "slow"))}>Slow</button>}<button disabled={!accessoryReady} onClick={() => run(() => api.signal(selectedStationary, "go"))}>Go</button></>}
+            {area === "machine" && (selectedAccessory?.actions || []).map((action) => <button key={action} disabled={!accessoryReady} onClick={() => run(() => api.machine(selectedStationary, action))}>{action.replaceAll("_", " ")}</button>)}
+          </div>
+          {!accessoryReady && <p className="notice">MC broker or node is not ready. No command will be sent.</p>}
+        </section>
+      )}
+
+      {area === "operation" && <><section className="panel roster-panel">
         <Picker label="Active locomotive" items={rosterItems} value={selectedAsset}
           placeholder={roster.length ? "Select locomotive" : "No active locomotives"}
           disabled={pendingFunctions.size > 0}
@@ -369,7 +417,7 @@ export default function App() {
             );
           })}
         </div>
-      </section>
+      </section></>}
     </main>
   );
 }

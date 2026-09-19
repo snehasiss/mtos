@@ -4,7 +4,9 @@ Date: 2026-09-18
 
 **Yes—the new MTOS design should fit on a 2 GB Cubietruck A20 for normal operation without local AI inference. An 8 GB Raspberry Pi is not required by this architecture.** If buying new hardware, I would choose a **Raspberry Pi 5 with 4 GB** for CPU performance and headroom.
 
-This is a design-based estimate, not a hardware benchmark: the latest six-service architecture is documented but not yet implemented.
+This is a design-based estimate, not a hardware benchmark. Since this review was
+written, the five normal services and hardware-free MC path have been implemented;
+the memory figures remain unmeasured planning allowances.
 
 ## My assessment of the design
 
@@ -25,7 +27,13 @@ Socket.IO should improve responsiveness, but **moving hardware waits out of brow
 
 I would keep the accepted process separation. Five small Python services are reasonable here; they do not inherently require several gigabytes.
 
-## The design gaps I would resolve first
+## Design gaps identified at review time
+
+The five items below are retained as review history. Asset leases/fencing,
+DCC/Core watchdogs, Core/MC command identity and initial bounded queues are now
+implemented, and older topology documents are marked historical. Retention/
+pruning policy, sustained-load measurement and physical commissioning still
+require verification rather than being silently treated as complete.
 
 1. **Asset edits versus Core reservations need an explicit cross-service protocol.**
    The earlier design relied on a shared SQLite transaction. ADR-009 separates ownership, but a revision check followed by dispatch is insufficient: configuration could change between those steps. Define how Asset atomically protects an operating configuration, how Core obtains that protection, and how it survives restart. This is the most consequential migration issue.

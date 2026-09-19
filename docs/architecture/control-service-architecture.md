@@ -3,7 +3,8 @@
 Date: 2026-09-18  
 Status: detailed companion to accepted
 [ADR-009](../decisions/ADR-009-service-decomposition-and-control-architecture.md);
-protocol/process details remain implementation work
+Asset, DCC, Core, HMI and the hardware-free MC path are implemented; CV/PROG,
+physical commissioning, route/interlocking and AI remain later work
 
 ## Decision summary
 
@@ -173,10 +174,10 @@ sequenceDiagram
 
 ## ESP32 control service and MQTT
 
-MQTT is the correct Cubietruck-to-ESP32 boundary: lightweight, asynchronous and
+MQTT is the correct control-host-to-ESP32 boundary: lightweight, asynchronous and
 tolerant of intermittent Wi-Fi. Browsers do not publish MQTT.
 
-- Mosquitto runs locally on Cubietruck.
+- Mosquitto runs locally on the control host.
 - Commands use node-specific topics, QoS 1 and non-retained payloads.
 - Nodes emit accepted, started, completed or failed events with command,
   producer-session, boot and configuration-revision identities.
@@ -252,14 +253,19 @@ disconnects a display; it does not implicitly stop or restore a train.
 7. Test reconnect, duplicate commands, event gaps, emergency preemption and
    disconnect at every stage with fake serial.
 8. Commission CSB1 MAIN under supervision.
-9. Implement `mtos_mc` with Mosquitto using ADR-006 session envelopes.
+9. Implement `mtos_mc` with ADR-006 session envelopes and a Mosquitto adapter.
+   The host service, fake transport, Core/HMI route and ESP32 firmware are now
+   implemented; live broker and electronics commissioning remain pending.
 10. Add autonomous producers only after occupancy, route reservation and
    interlocking exist.
 
-## Open implementation choices
+## Current implementation choices and remaining work
 
-- Flask-SocketIO threading with Gunicorn/simple-websocket versus ASGI
-  python-socketio. Choose by reconnect correctness and measured SBC load.
-- Authentication between Axon and Cubietruck.
-- Concrete internal RPC transport and schema serialization, within ADR-009's
-  service boundaries and bounded-resource contract.
+- HMI currently uses Flask-SocketIO threading with `simple-websocket` and the
+  Werkzeug runner. A production supervisor/server choice still requires
+  reconnect and SBC-load measurement; ASGI remains an alternative, not the
+  implemented stack.
+- Authentication between a remote AI host and the control host.
+- Internal RPC currently uses loopback HTTP/JSON with a shared internal token.
+  Version negotiation and stronger production authentication remain work within
+  ADR-009's boundaries.

@@ -1,8 +1,8 @@
 # MTOS project context
 
-Last updated: 2026-09-18. Checkpoint: Phase 1 EX-CSB1 MAIN control and its
-React/TypeScript UI implemented locally, awaiting owner review/commit. The owner
-handles commits and pushes.
+Last updated: 2026-09-18. Checkpoint: Asset, DCC MAIN, Core, HMI and the
+hardware-free MC path are implemented locally. EX-CSB1 and accessory electronics
+commissioning remain pending. The owner handles commits and pushes.
 
 ## How to use and maintain this file
 
@@ -28,8 +28,9 @@ push without an explicit request. Do not launch delegated agents unless asked.
   operation is a third, aspirational function.
 - Lightweight, self-hosted, out-of-box model-train software, without requiring
   JMRI, WiThrottle or a heavyweight Java application.
-- Python 3.11+, Flask, Waitress, standard-library SQLite, JSON and Pillow.
-  An iPhone-first browser UI also serves tablet/desktop users.
+- Python 3.11+, Flask, Waitress for ordinary HTTP services, Flask-SocketIO/
+  simple-websocket for HMI, standard-library SQLite, JSON, Pillow, PySerial and
+  Paho MQTT. An iPhone-first browser UI also serves tablet/desktop users.
 - SQLite is authoritative, not a collection of independently edited JSON files.
   JSON remains the API and migration representation; variable attributes use JSON
   columns. No external database server is required.
@@ -43,8 +44,11 @@ push without an explicit request. Do not launch delegated agents unless asked.
 
 | Service | Port | Implementation |
 | --- | --- | --- |
-| `mtos_asset` | 5301 | Working Flask/Waitress roster UI and JSON API; `asset_manager` is a compatibility alias |
-| `asset_control` | 5302 | Phase 1 EX-CSB1 MAIN Flask/Waitress control service and UI |
+| `mtos_asset` | 5301 LAN | Roster UI/API and asset configuration authority; `asset_manager` is an alias |
+| `mtos_hmi` | 5302 LAN | React/Socket.IO interface for DCC and stationary assets; `asset_control` is an alias |
+| `mtos_core` | 5303 loopback | Canonical operational authority and `core.sqlite3` owner |
+| `mtos_dcc` | 5304 loopback | Exclusive EX-CSB1 serial adapter |
+| `mtos_mc` | 5305 loopback | MQTT/accessory scheduler and `mc.sqlite3` owner |
 
 The asset manager currently provides:
 
@@ -61,10 +65,12 @@ The asset manager currently provides:
 - Atomic roster writes, reference validation, rollback and revision conflicts.
 - Session-based CSRF protection on writes and health/service identity reporting.
 
-No decoder programming, speed/direction control, track-power control, actual
-turnout actuation, signal operation, MQTT producer, ESP32 firmware, route engine,
-interlocking or autonomous operation is implemented in this service. Editing
-`control` records configuration only; it does not contact hardware.
+The Asset service itself performs no decoder programming, speed/direction,
+track-power or accessory actuation. DCC MAIN control is implemented through HMI,
+Core and DCC. The MC host path and ESP32 firmware source are implemented but not
+physically commissioned. CV/PROG, route/occupancy/interlocking and autonomous
+operation remain unimplemented. Editing Asset `control` records never contacts
+hardware.
 
 ## Domain model: current inventory contract
 
@@ -317,66 +323,39 @@ Keep snapshots on physically separate storage and rehearse restoration.
 
 ```text
 mtos/
-├── mtos-context.md                  # This living checkpoint/handover
-├── README.md                       # Product, setup, sketch, license links
-├── LICENSE / NOTICE / TRADEMARKS.md
-├── pyproject.toml                  # Dependencies, packaging, pytest, backup CLI
-├── requirements.txt                # Runtime install list, aligned with pyproject
-├── .gitignore
+├── README.md / mtos-context.md / LICENSE / NOTICE / TRADEMARKS.md
+├── pyproject.toml / requirements.txt
 ├── docs/
-│   ├── README.md                   # Documentation index
-│   ├── decisions/
-│   │   ├── ADR-001-product-scope.md
-│   │   ├── ADR-002-persistence.md
-│   │   ├── ADR-003-domain-data-categories.md
-│   │   ├── ADR-004-decentralized-accessory-nodes.md
-│   │   ├── ADR-005-accessory-power-distribution.md
-│   │   ├── ADR-006-mqtt-accessory-messaging.md
-│   │   ├── ADR-007-stationary-assets-control-network-and-power.md
-│   │   └── ADR-008-asset-inventory-model.md
-│   ├── architecture/
-│   │   ├── system-context.md
-│   │   └── layout-automation.md
-│   ├── domain/vocabulary.md
-│   ├── operations/roster.md         # Run, API, migration, backup/restore
-│   ├── reviews/layout-automation-review.md
-│   └── images/UP3826_Challenger_sketch.png
+│   ├── README.md                    # Current/historical documentation index
+│   ├── decisions/ADR-001…ADR-009
+│   ├── architecture/                # Service, module and historical designs
+│   ├── operations/                  # Roster and integrated startup guides
+│   ├── domain/ / reviews/ / mockups/
+│   └── images/                      # Schematics and README artwork
+├── frontend/asset_control/          # React/TypeScript HMI source and Vite config
+├── firmware/esp32_node/             # PlatformIO ESP32 source/config examples
 ├── src/mtos/
-│   ├── __init__.py
-│   ├── app.py                      # Flask factory/routes/security
-│   ├── roster.py                   # SQLite repository, validation, media writes
-│   ├── image_optimizer.py          # Shared upload/import image optimizer
-│   ├── legacy.py                   # Source migration/mapping/preservation
-│   ├── backup.py                   # Snapshot, verify, restore, CLI
-│   ├── assets/
-│   │   ├── __init__.py
-│   │   ├── model.py                # Domain types, IDs and vocabulary
-│   │   ├── library.py              # Storage-neutral aggregate/reference rules
-│   │   └── images.py               # Image identity resolution/directory import
-│   ├── migrations/
-│   │   ├── 001_roster.sql
-│   │   ├── 002_lifecycle.sql
-│   │   └── 003-simple-lifecycle.sql
-│   ├── templates/roster.html
-│   └── static/roster.css, roster.js
+│   ├── asset_app.py / app.py / roster.py / assets/
+│   ├── core_app.py / core/          # Operational authority and Core client/API
+│   ├── dcc_app.py / dcc/            # EX-CSB1 adapter
+│   ├── mc_app.py / mc/              # MQTT/accessory adapter and scheduler
+│   ├── hmi_app.py / hmi/            # Socket.IO browser gateway
+│   ├── control_app.py / control/     # Superseded monolithic compatibility code
+│   ├── control_ui/                   # Committed Vite production bundle
+│   ├── migrations/001…005
+│   ├── image_optimizer.py / legacy.py / backup.py
+│   ├── templates/ / static/
+│   └── __init__.py
 ├── tools/
-│   ├── asset_manager               # start/stop/restart/status, 5301
-│   ├── asset_control               # Reserved control launcher, 5302
-│   ├── service.py                  # Service lifecycle implementation
-│   ├── serve.py                    # Waitress entry and lifetime lock
-│   ├── import_image.py
-│   ├── import_legacy.py
-│   └── mtos_backup
-├── tests/
-│   ├── test_assets.py
-│   ├── test_images.py
-│   ├── test_roster.py
-│   ├── test_lifecycle_v2.py
-│   ├── test_service_bind.py
-│   └── test_mobile_ui.py
+│   ├── mtos_asset / mtos_hmi / mtos_core / mtos_dcc / mtos_mc
+│   ├── mtos_services               # Integrated start/stop/restart/status
+│   ├── asset_manager / asset_control  # Compatibility aliases
+│   ├── service.py / serve.py / build_asset_control_ui
+│   └── import_image.py / import_legacy.py / mtos_backup
+├── tests/                           # Asset, DCC, Core, HMI, MC and integration tests
 ├── data/                           # Local operational data, not source history
-│   ├── db/                         # asset.sqlite3, session.key, safety copy
-│   ├── media/{family}/              # {asset_id}_n.jpg
+│   ├── db/                         # asset.sqlite3, core.sqlite3, mc.sqlite3
+│   ├── media/{family}/             # {asset_id}_n.jpg
 │   ├── run/                        # Service state, locks and logs
 │   └── .lock                       # Application data-write coordination
 └── .venv/                          # Local Python environment, ignored
@@ -386,12 +365,16 @@ Generated caches/egg-info are omitted above and ignored. Optional local backup
 directories and service-lifetime locks are also ignored. New clones must migrate,
 restore or create their own data; ignored directories are not supplied by Git.
 
-## Future control design: context, not implemented features
+## Historical accessory-control planning checkpoint
 
-SBC-A20/Cubietruck owns deterministic operation and the accessory scheduler.
-Axon is strictly for later SLM planning, not a parallel hardware authority. The
-direct Cubietruck-to-EX-CSB1 serial locomotive path must not depend on MQTT/Wi-Fi.
-Accessory nodes use ESP32 and MQTT over Wi-Fi with Mosquitto on the Cubietruck.
+This section records the plan before ADR-009 decomposition and MC implementation.
+Current service ownership and implementation status are in the later checkpoints.
+
+The original plan placed deterministic operation and the accessory scheduler on
+SBC-A20/Cubietruck and reserved Axon for SLM planning. ADR-009 subsequently made
+the control host hardware-independent while retaining one Core authority. The
+direct control-host-to-EX-CSB1 path must not depend on MQTT/Wi-Fi; accessory
+nodes use ESP32 and MQTT over Wi-Fi with local Mosquitto.
 
 Later owner decisions: one ESP32 CP2102 dual-core 30-pin board, one PCA9685 and
 one XL4015 converter per node, 12 V distribution with local 5 V conversion;
@@ -1182,9 +1165,10 @@ no hardware command was sent, and no commit or push was performed.
 
 ### 2026-09-18: mtos_mc design checkpoint
 
-The microcontroller boundary is finalized in
-`docs/architecture/mtos-mc-module.md`; implementation has not started. `mtos_mc`
-will listen only on `127.0.0.1:5305`, own MQTT/node sessions and a separate
+At this design checkpoint, before the later implementation checkpoint below,
+the microcontroller boundary was finalized in
+`docs/architecture/mtos-mc-module.md`. `mtos_mc` was specified to listen only on
+`127.0.0.1:5305`, own MQTT/node sessions and a separate
 `data/db/mc.sqlite3` execution ledger, and accept only fenced typed operations
 from Core. Its public operational vocabulary is `turnout.set`, `signal.set` and
 `machine.execute`. Raw MQTT topics, GPIO/channel numbers, PWM values and arbitrary
@@ -1230,13 +1214,13 @@ was atomically renamed from `data/db/mtos.sqlite3` to
 `data/db/asset.sqlite3`, preserving 161 assets, 136 media records and all legacy
 history; SQLite integrity is clean and the approved schema version 5 migration
 was applied. `data/db/core.sqlite3` was initialized directly through the Core
-repository without starting hardware services. Future MC adapter evidence will
-use `data/db/mc.sqlite3` when that service is implemented.
+repository without starting hardware services. MC adapter evidence now uses
+`data/db/mc.sqlite3`.
 
 DCC and HMI intentionally have no `dcc.sqlite3` or `hmi.sqlite3`: their Version 1
 state is device/session state and a browser projection, respectively. Empty
 databases are not created for naming symmetry. Backup/restore now uses
-`asset.sqlite3`, includes `core.sqlite3` and future `mc.sqlite3` when present,
+`asset.sqlite3`, includes `core.sqlite3` and `mc.sqlite3` when present,
 and can still verify/restore older snapshots containing `mtos.sqlite3`.
 
 The Asset file still contains 195 completed `control_command` rows and one stale
@@ -1244,3 +1228,91 @@ The Asset file still contains 195 completed `control_command` rows and one stale
 preserved rather than deleted or silently transformed during the filename
 migration. New canonical operational transactions belong to Core. Removal or
 archival of those legacy tables requires a separate explicit migration.
+
+### 2026-09-18: mtos_mc implementation checkpoint
+
+The hardware-free MC implementation is complete. `mtos_mc` listens only on
+`127.0.0.1:5305`, persists bounded subordinate execution evidence in
+`data/db/mc.sqlite3`, accepts only fenced Core sessions, validates typed
+`turnout.set`, `signal.set` and `machine.execute` requests, and publishes node
+commands through a replaceable MQTT transport. Live MQTT is deliberately off by
+default; `MTOS_MQTT_ENABLED=1` enables the Paho/Mosquitto adapter during
+supervised commissioning.
+
+The scheduler enforces one global servo permit across every node, sequential
+actuation of both servos in a double slip, one serialized signal-output writer
+per node and one Version 1 machine permit. A reboot observed after dispatch marks
+the execution `uncertain`; an already dispatched servo retains the global gate.
+Automatic stale-without-reboot transition remains pending, so matching evidence
+or supervised reconciliation may be required. MQTT PUBACK is transport evidence only,
+not physical completion. Node readiness requires presence, boot identity,
+compatible firmware, matching configuration revision and the current Core/MC
+producer-session handshake.
+
+Core remains owner of the canonical operational transaction. MC execution
+updates are reconciled back into Core and then reach browsers in the HMI
+Socket.IO snapshot. HMI exposes Turnout, Signal and Machine tabs, obtains
+stationary assets from Asset through Core, and disables physical controls until
+the broker and selected node are ready. HMI never talks to MQTT directly.
+
+Initial PlatformIO firmware under `firmware/esp32_node` covers ESP32 Wi-Fi/MQTT
+sessions, retained availability/status, command deduplication, nonblocking SG90
+sequences through one PCA9685, mutually exclusive signal images through one
+74HC595, autonomous buffer-stop flashing and a bounded isolated-relay pulse for
+the BLI 7924 water tower. Turnout position is persisted in ESP32 NVS and unknown
+startup position fails closed. XL4015 and the 12 V/5 A supply are power hardware,
+not software-addressed devices.
+
+Host behavior is tested without electronics by a deterministic fake MQTT
+transport. The full stack starts Asset, DCC, MC, Core and HMI in that order and
+stops in reverse order. A temporary-data smoke test verified all five health
+endpoints, fenced Core/DCC/MC initialization, truthful broker-offline HMI state
+and clean shutdown. Physical pin assignments, electrical measurements,
+Mosquitto ACLs, firmware flashing and end-to-end movement remain commissioning
+work after the ordered hardware arrives. No code has been committed by Codex.
+
+### 2026-09-18: repository documentation consistency checkpoint
+
+All 32 project Markdown/README documents were reviewed after MC implementation.
+Current documentation now consistently names Asset/HMI/Core/DCC/MC, ports
+5301–5305, startup/shutdown order and service-owned `asset.sqlite3`,
+`core.sqlite3` and `mc.sqlite3`. ADR-002 records the ADR-009 ownership amendment;
+ADR-007 is host-independent while preserving its original SBC power planning;
+ADR-008 points to the decomposed control services. The system-context diagram,
+module checkpoints, operations guides and root README reflect the implemented
+hardware-free MC path.
+
+Monolithic `asset_control`, shared-database and polling documents are grouped and
+labelled as historical baselines rather than silently rewritten. The MC design
+now distinguishes implemented behavior from targets: terminal/event pruning,
+automatic stale-dispatch uncertainty, full HMI reconciliation diagnostics,
+systemd, live broker ACL/session validation, PlatformIO compilation and physical
+commissioning remain pending. Firmware event publishing is presently QoS 0,
+active-execution duplicates return busy rather than replaying state, and host
+PUBACK evidence is not persisted; these are commissioning blockers against the
+QoS 1 target contract. ADR-009 likewise identifies periodic lease renewal,
+emergency-only bypass and sustained-load qualification as unimplemented targets.
+
+Local Markdown links were checked with zero missing targets; all fenced code
+blocks are balanced and `git diff --check` passes. The preceding software
+checkpoint remains 96 tests passed with one optional browser smoke test skipped.
+No commit or push was performed.
+
+### 2026-09-18: live MC database initialized
+
+`data/db/mc.sqlite3` was initialized directly through `McRepository` without
+starting MC, MQTT or hardware. It is schema version 1; SQLite integrity is `ok`.
+The empty live schema contains `metadata`, `execution`, `event`, `node` and
+`asset_fence` plus the execution-state index. The file is operational data and
+remains excluded from Git; `mtos_backup` includes it with Asset/Core databases.
+
+### 2026-09-18: HMI initial-load timeout fix
+
+The React acknowledgement helper emits an explicit null payload for read events.
+The HMI snapshot, roster, device and stationary Socket.IO handlers previously
+accepted zero arguments, so Flask-SocketIO raised `TypeError` and the browser
+reported `HMI response timed out`. All four handlers now accept an optional
+payload, and the regression test sends the same explicit null as the browser.
+The full suite passes 96 tests with one optional browser test skipped. The running
+HMI could not be restarted from the Codex process sandbox (`SIGTERM` permission
+denied); the owner must run `tools/mtos_hmi restart` once to load the fix.

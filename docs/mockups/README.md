@@ -1,4 +1,7 @@
-# MAIN control UI proposal
+# Historical MAIN control UI proposal
+
+This mockup predates the React `mtos_hmi` implementation. It remains a visual
+design record, not the current operator interface or an executable specification.
 
 Open [asset-control-main.html](asset-control-main.html) in a browser. This is a
 standalone interactive mockup with sample identities; it makes no API requests
@@ -13,7 +16,7 @@ details, explicitly labelled MAIN power, an emergency-stop resume action, fine
 speed adjustment and responsive desktop columns. All function names stay numeric
 until decoder-specific labels are configured. Programming is added in Phase 2.
 
-This is the visual review checkpoint before implementation. Mock state changes
+This was the visual review checkpoint before implementation. Mock state changes
 are immediate simulations; production controls must wait for the applicable
 device outcome and implement the reviewed command contracts.
 

@@ -6,6 +6,11 @@
 - Result: architecture retained; electrical, state, and message-contract gaps
   made explicit in ADR-004 through ADR-006 and the layout architecture guide
 
+> Historical review note: ADR-007 and the `mtos_mc` low-level design resolve the
+> software protocol/topology decisions listed here. XL4015 replaces LM2596,
+> PCA9685 is servo-only, and signals use 74HC595 outputs. Electrical measurements,
+> final driver stages, credentials and physical commissioning remain open.
+
 ## What the four documents establish
 
 The documents describe one coherent accessory subsystem:
@@ -112,7 +117,7 @@ possible causes for node lag and supplies no corresponding actions. The new
 architecture guide completes the diagnostic sequence without treating DHCP or
 LM2596 drift as the only explanations.
 
-## Decisions still needed before implementation
+## Decisions identified before the later implementation
 
 1. Specify the versioned MQTT topics and payload schemas, command expiry,
    retained-message policy, acknowledgement/error behavior, and compatibility

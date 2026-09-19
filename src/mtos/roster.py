@@ -245,20 +245,12 @@ class Roster:
                 if type(expected) is not int or row["revision"] != expected:
                     raise Conflict(f"Asset revision changed: {asset_id}")
                 current = db.execute("SELECT * FROM asset_lease WHERE asset_id=?", (asset_id,)).fetchone()
-                if current and current["state"] == "held" and current["expires_at"] <= stamp.isoformat():
-                    db.execute(
-                        "UPDATE asset_lease SET state='expired_pending_reconciliation',updated_at=? WHERE asset_id=?",
-                        (stamp.isoformat(), asset_id),
-                    )
-                    current = db.execute("SELECT * FROM asset_lease WHERE asset_id=?", (asset_id,)).fetchone()
-                if current and current["state"] == "expired_pending_reconciliation":
-                    raise Conflict(f"Asset lease requires reconciliation: {asset_id}")
                 supersede = current and current["core_session_id"] != core_session_id
                 if supersede and core_epoch <= current["core_epoch"]:
                     raise Conflict(f"Asset is leased by another Core session: {asset_id}")
                 if current and not supersede:
                     db.execute(
-                        "UPDATE asset_lease SET purpose=?,expires_at=?,updated_at=? WHERE asset_id=?",
+                        "UPDATE asset_lease SET purpose=?,state='held',expires_at=?,updated_at=? WHERE asset_id=?",
                         (purpose, expires, stamp.isoformat(), asset_id),
                     )
                     lease_id, token = current["lease_id"], current["fencing_token"]

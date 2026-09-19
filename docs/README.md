@@ -6,34 +6,38 @@ from proposals still under discussion.
 ## Decisions
 
 - [ADR-001: Product scope and system boundaries](decisions/ADR-001-product-scope.md)
-- [ADR-002: Embedded transactional persistence](decisions/ADR-002-persistence.md)
-- [ADR-003: Domain data categories](decisions/ADR-003-domain-data-categories.md)
-- [ADR-004: Decentralized accessory-control nodes](decisions/ADR-004-decentralized-accessory-nodes.md)
-- [ADR-005: Accessory power distribution](decisions/ADR-005-accessory-power-distribution.md)
-- [ADR-006: MQTT for accessory messaging](decisions/ADR-006-mqtt-accessory-messaging.md)
+- [ADR-002: Embedded transactional persistence; ownership amended by ADR-009](decisions/ADR-002-persistence.md)
+- [ADR-003: Domain data categories; superseded by ADR-008](decisions/ADR-003-domain-data-categories.md)
+- [ADR-004: Decentralized accessory-control nodes; superseded by ADR-007](decisions/ADR-004-decentralized-accessory-nodes.md)
+- [ADR-005: Accessory power distribution; superseded by ADR-007](decisions/ADR-005-accessory-power-distribution.md)
+- [ADR-006: MQTT for accessory messaging; superseded by ADR-007](decisions/ADR-006-mqtt-accessory-messaging.md)
 - [ADR-007: Stationary assets, control network, and power management](decisions/ADR-007-stationary-assets-control-network-and-power.md)
 - [ADR-008: Normalized asset-management and roster domain](decisions/ADR-008-asset-inventory-model.md)
 - [ADR-009: Service decomposition and real-time control architecture](decisions/ADR-009-service-decomposition-and-control-architecture.md)
 
-## Working architecture
+## Current architecture and operations
 
-- [Phase 1 CSB1 MAIN low-level design](architecture/asset-control-phase-1-low-level-design.md)
 - [Real-time control-service architecture](architecture/control-service-architecture.md)
 - [mtos_dcc module checkpoint](architecture/mtos-dcc-module.md)
 - [mtos_core module checkpoint](architecture/mtos-core-module.md)
 - [mtos_hmi module checkpoint](architecture/mtos-hmi-module.md)
 - [mtos_mc scope and low-level design](architecture/mtos-mc-module.md)
-
-- [asset_control implementation contract — 2026-09-17 review](architecture/asset-control-implementation-contract.md)
-
 - [Run, migrate and back up the roster](operations/roster.md)
 - [Integrated service startup and shutdown](operations/service-startup.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)
+- [Domain vocabulary](domain/vocabulary.md)
+
+## Historical design baselines
+
+These retain requirements and rationale but their monolithic `asset_control`,
+shared-database or HTTP-polling topology is superseded by ADR-009.
+
+- [Phase 1 CSB1 MAIN low-level design](architecture/asset-control-phase-1-low-level-design.md)
+- [asset_control implementation contract — 2026-09-17 review](architecture/asset-control-implementation-contract.md)
 - [asset_control pre-design](architecture/asset-control-pre-design.md)
 - [asset_control device-interface plan](architecture/asset-control-device-interfaces.md)
 - [EX-CSB1 predecessor review](architecture/asset-control-plan.md)
-- [Domain vocabulary](domain/vocabulary.md)
 
 ## Reviews
 

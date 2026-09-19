@@ -45,6 +45,9 @@ class HmiService:
     def devices(self):
         return self.gateway.devices()
 
+    def stationary(self):
+        return self.gateway.stationary()
+
     def accept(self, socket_id, command):
         encoded = json.dumps(command, separators=(",", ":")).encode()
         if len(encoded) > 16 * 1024:
@@ -76,7 +79,8 @@ class HmiService:
             result = self.gateway.command(
                 accepted["operation"], accepted["payload"], accepted["command_id"]
             )
-            return self.event("command.completed", accepted["command_id"], result=result)
+            kind = "command.queued" if result.get("state") == "queued" else "command.completed"
+            return self.event(kind, accepted["command_id"], result=result)
         except Exception as error:
             return self.event("command.failed", accepted["command_id"], error=str(error))
         finally:
