@@ -449,7 +449,10 @@ class Roster:
             aid = item["id"]
             if asset_id and (
                 db.execute("SELECT 1 FROM control_reservation WHERE asset_id=?", (aid,)).fetchone()
-                or db.execute("SELECT 1 FROM asset_lease WHERE asset_id=?", (aid,)).fetchone()
+                or db.execute(
+                    "SELECT 1 FROM asset_lease WHERE asset_id=? AND state='held' AND expires_at>?",
+                    (aid, datetime.now(UTC).isoformat()),
+                ).fetchone()
             ):
                 protected = lambda value: {
                     "family": value.get("family"),

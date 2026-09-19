@@ -363,3 +363,30 @@ def test_confirmed_legacy_lifecycle_corrections(
         status,
         location,
     )
+
+
+def _leased_active_loco(roster):
+    roster.save(
+        loco(lifecycle={"possession": "received", "status": "active", "location": "main_west_1"})
+    )
+    roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle", duration_seconds=5)
+
+
+def test_live_lease_blocks_status_change(roster):
+    _leased_active_loco(roster)
+    with pytest.raises(Conflict, match="reserved for operation"):
+        roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
+
+
+def test_expired_lease_does_not_block_status_change(roster):
+    import sqlite3
+
+    _leased_active_loco(roster)
+    with sqlite3.connect(roster.database) as db:
+        db.execute("UPDATE asset_lease SET expires_at='2000-01-01T00:00:00+00:00'")
+    saved = roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
+    assert saved["lifecycle"]["status"] == "parked"
+    assert saved["revision"] == 2
+    # a lease taken against the old revision can no longer be acquired
+    with pytest.raises(Conflict, match="revision changed"):
+        roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle")
