@@ -201,6 +201,74 @@ class CoreService:
         return self._dispatch(command_id, "function", asset_id, journal_payload,
                               f"/v1/locomotives/{address}/functions/{number}", payload, asset, lease)
 
+    def program_address(self, asset_id, new_address, command_id=None):
+        """Program, read back, then commit a self-propelled asset's DCC address."""
+        self._require_started()
+        if type(new_address) is not int or not 1 <= new_address <= 10239:
+            raise ValueError("new_address must be an integer from 1 through 10239")
+        asset = self.asset.get(asset_id)
+        life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+        old_address = control.get("address")
+        if asset.get("family") not in {"loco", "mow"} or control.get("dcc") is not True:
+            raise CoreConflict("Address programming requires a DCC self-propelled asset")
+        if life.get("possession") != "received" or life.get("status") != "maintenance":
+            raise CoreConflict("Address programming requires a received asset in maintenance")
+        if type(old_address) is not int or not 1 <= old_address <= 10239:
+            raise CoreConflict("Asset requires a valid current DCC address")
+        if old_address == new_address:
+            raise ValueError("new_address must differ from the current address")
+        payload = {"old_address": old_address, "new_address": new_address,
+                   "asset_revision": asset["revision"]}
+        replay = self._existing(command_id, "program_address", asset_id, payload)
+        if replay:
+            return replay
+        lease = self.asset.acquire_lease(
+            asset_id, asset["revision"], self.session_id, self.epoch, "program_address"
+        )
+        self.repository.reserve(asset_id, lease, asset["revision"], old_address)
+        cid = command_id or str(uuid.uuid4())
+        self.repository.begin(cid, "program_address", payload, asset_id)
+        envelope = {
+            "command_id": cid,
+            "core_session_id": self.session_id,
+            "core_epoch": self.epoch,
+            "asset_id": asset_id,
+            "asset_revision": asset["revision"],
+            "lease_id": lease["lease_id"],
+            "fencing_token": lease["fencing_token"],
+            "old_address": old_address,
+            "new_address": new_address,
+        }
+        hardware = None
+        try:
+            hardware = self.dcc.program_address(envelope)
+            if hardware.get("outcome") != "confirmed" or (
+                hardware.get("reported") or {}
+            ).get("address") != new_address:
+                raise CoreConflict("Decoder address was not verified")
+            updated = self.asset.update_programmed_address(
+                asset_id, asset["revision"], new_address
+            )
+            result = {
+                **hardware,
+                "asset_id": asset_id,
+                "asset_revision": updated["revision"],
+                "control_address": new_address,
+            }
+            self.repository.release(asset_id)
+            self.repository.finish(cid, "completed", "confirmed", result)
+            return {"command_id": cid, **result}
+        except Exception as error:
+            evidence = {
+                "hardware": hardware,
+                "old_address": old_address,
+                "new_address": new_address,
+                "asset_revision": asset["revision"],
+                "error": str(error),
+            }
+            self.repository.finish(cid, "uncertain", "uncertain", evidence)
+            raise
+
     def stop(self, asset_id, command_id=None):
         self._require_started()
         replay = self._existing(command_id, "stop", asset_id, {})

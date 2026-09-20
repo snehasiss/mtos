@@ -9,6 +9,13 @@
 > ADR-009 now governs target service ownership, real-time communication and
 > recovery; this file remains predecessor evidence only.
 
+> **2026-09-20 implementation note:** ADR-010 now finalizes lifecycle and decoder
+> address ownership. The guarded Core-to-DCC address-programming backend, CV1/
+> CV17/CV18/CV29 handling, readback, conditional Asset commit and uncertain-result
+> journal are implemented. The HMI, physical commissioning and general-purpose CV
+> programming remain deferred. The older proposals below are preserved as design
+> history rather than rewritten as if they were the current implementation.
+
 Date: 2026-09-13. Status: proposed, not an accepted ADR or coding authorization.
 Scope: first DCC-EX control increment on port 5302, using Python/Flask and an
 iPhone-first interface. No hardware commands were sent during this review.

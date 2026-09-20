@@ -156,7 +156,7 @@ the command later when desired; a missing destination makes it exit nonzero.
 | GET /api/assets?q=&family=&status=&limit=24&offset=0 | Search/paginate |
 | POST /api/assets | Add asset and lifecycle |
 | GET /api/assets/L001 | Read composed roster record |
-| PATCH /api/assets/L001 | Update fields; revision required |
+| PATCH /api/assets/L001 | Update Asset-owned fields; revision required; direct DCC-address edits are inventory-only |
 | GET /api/assets/L001/media | Media metadata |
 | POST /api/assets/L001/media | Multipart image and sequence; shared optimizer |
 | GET /api/assets/L001/media/L001_1.jpg | Read registered image |
@@ -169,7 +169,14 @@ send `X-CSRF-Token` on writes. Dates are ISO dates. Asset PATCH recursively merg
 objects; arrays replace their collection; null clears an optional field. Asset IDs
 are immutable. Retirement is a lifecycle update with status `retired`. Lifecycle
 defaults are status `unavailable` and location `off_track`; its sole optional
-date is `purchased_on`. Physical programming/operation is outside this application.
+date is `purchased_on`.
+
+Asset owns lifecycle status and permits those edits even when operational holds
+exist; changing the operating view invalidates those holds and forces Core to
+revalidate. The UI warns when removing an active controlled asset because the
+save cannot stop already moving hardware. A direct `control.address` edit is also
+allowed with a warning and does not program the decoder. The normal physical
+address-change path is the Core/DCC programming workflow in ADR-010.
 
 `GET /api/next-asset-id?family=machine` returns the first available ID in that
 family prefix, such as `E001`. Passenger and freight share the C namespace. The

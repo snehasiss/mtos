@@ -14,6 +14,9 @@ from proposals still under discussion.
 - [ADR-007: Stationary assets, control network, and power management](decisions/ADR-007-stationary-assets-control-network-and-power.md)
 - [ADR-008: Normalized asset-management and roster domain](decisions/ADR-008-asset-inventory-model.md)
 - [ADR-009: Service decomposition and real-time control architecture](decisions/ADR-009-service-decomposition-and-control-architecture.md)
+- [ADR-010: Asset lifecycle and decoder-address ownership](decisions/ADR-010-asset-lifecycle-and-decoder-address-ownership.md)
+- [ADR-011: Cubietruck operating-system and Python environment](decisions/ADR-011-cubietruck-setup.md)
+- [ADR-012: Deploying MTOS on Cubietruck A20](decisions/ADR-012-porting-mtos-on-cubietruck.md)
 
 ## Current architecture and operations
 
@@ -24,6 +27,7 @@ from proposals still under discussion.
 - [mtos_mc scope and low-level design](architecture/mtos-mc-module.md)
 - [Run, migrate and back up the roster](operations/roster.md)
 - [Integrated service startup and shutdown](operations/service-startup.md)
+- [Cubietruck installation context and commissioning evidence](operations/cubietruck-installation-context.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)
 - [Domain vocabulary](domain/vocabulary.md)

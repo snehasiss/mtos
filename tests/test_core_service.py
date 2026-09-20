@@ -27,6 +27,12 @@ class FakeAsset:
         return [{"id": "L001", "reporting_mark": "UP", "road_number": "28",
                  "prototype": "8500_gtel", "address": 28}]
 
+    def update_programmed_address(self, asset_id, revision, address):
+        assert asset_id == "L001" and revision == self.asset["revision"]
+        self.asset["control"]["address"] = address
+        self.asset["revision"] += 1
+        return self.asset
+
 
 class FakeDcc:
     def __init__(self):
@@ -58,6 +64,11 @@ class FakeDcc:
 
     def devices(self):
         return [{"selection_id": "fake", "port": "/dev/fake", "description": "Fake"}]
+
+    def program_address(self, envelope):
+        self.calls.append(("program_address", envelope))
+        return {"outcome": "confirmed", "operation": "program_address",
+                "reported": {"address": envelope["new_address"], "cvs": {1: envelope["new_address"]}}}
 
 
 class FakeMc:
@@ -147,6 +158,41 @@ def test_core_epoch_increases_across_service_restart(tmp_path):
         heartbeat_interval=None,
     )
     assert second.epoch == first.epoch + 1
+
+
+def test_core_programs_then_commits_decoder_address(tmp_path):
+    service = make_service(tmp_path)
+    service.asset.asset["lifecycle"]["status"] = "maintenance"
+    service.start()
+    result = service.program_address("L001", 29, "program-1")
+    assert result["outcome"] == "confirmed"
+    assert result["control_address"] == 29
+    assert service.asset.asset["control"]["address"] == 29
+    assert service.repository.reservation("L001") is None
+    with service.repository.connect() as database:
+        row = database.execute(
+            "SELECT state,outcome FROM command WHERE command_id='program-1'"
+        ).fetchone()
+    assert tuple(row) == ("completed", "confirmed")
+
+
+def test_core_records_uncertain_if_asset_commit_fails_after_programming(tmp_path):
+    service = make_service(tmp_path)
+    service.asset.asset["lifecycle"]["status"] = "maintenance"
+    service.start()
+    service.asset.update_programmed_address = lambda *_: (_ for _ in ()).throw(
+        RuntimeError("asset update failed")
+    )
+    import pytest
+    with pytest.raises(RuntimeError, match="asset update failed"):
+        service.program_address("L001", 29, "program-uncertain")
+    with service.repository.connect() as database:
+        row = database.execute(
+            "SELECT state,outcome,result FROM command WHERE command_id='program-uncertain'"
+        ).fetchone()
+    assert tuple(row[:2]) == ("uncertain", "uncertain")
+    assert '"address": 29' in row["result"]
+    assert service.repository.reservation("L001")["address"] == 28
 
 
 def test_core_routes_stationary_intent_to_mc_with_lease_and_resource(tmp_path):

@@ -3,7 +3,7 @@ const $=s=>document.querySelector(s), form=$('#asset-form');
 let schema,current=null,offset=0,searchGeneration=0;
 const field=n=>form.elements.namedItem(n);
 const val=n=>field(n).value.trim()||null;
-function error(e){$('#error').textContent=e.message;}
+function error(e){const box=$('#error');box.textContent=e.message;box.scrollIntoView({block:'center'});}
 async function api(path,options={}){
  const headers={'X-CSRF-Token':$('meta[name="csrf-token"]').content,...options.headers};
  if(options.body && !(options.body instanceof FormData)) headers['Content-Type']='application/json';
@@ -56,6 +56,13 @@ function gallery(){
 }
 form.onsubmit=async e=>{e.preventDefault();$('#error').textContent='';const button=form.querySelector('button[type="submit"]');button.disabled=true;
  try{
+ if(current&&current.lifecycle?.status==='active'&&val('status')!=='active'){
+  const op=await api('/api/assets/'+current.id+'/operation');
+  if((op.leased||op.reserved)&&!confirm(current.id+' is under operational control. Changing its status releases it: Core will refuse throttle and function commands, and a moving locomotive keeps its last speed. Stop it first if needed. Continue?'))return;
+ }
+ if(current&&current.control?.dcc===true&&Number(val('address'))!==current.control.address){
+  if(!confirm('Changing the roster DCC address does not program the physical decoder. Use MTOS Programming for a coordinated decoder address change. Save this inventory-only change anyway?'))return;
+ }
  const payload={id:current?.id||val('id'),family:val('family'),type:val('type'),label:val('label'),notes:val('notes'),
  prototype:{...(current?.prototype||{}),reporting_mark:val('reporting_mark'),road_number:val('road_number'),maker:val('prototype_maker'),model:val('prototype_model')},
  model:{...(current?.model||{}),scale:val('scale'),maker:val('model_maker'),product_number:val('product_number'),catalog_name:val('catalog_name')},

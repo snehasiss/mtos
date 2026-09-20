@@ -117,6 +117,13 @@ def create_core_app(config=None):
         value = body()
         return jsonify(service.stop(asset_id, value.get("command_id")))
 
+    @app.post("/v1/assets/<asset_id>/program-address")
+    def program_address(asset_id):
+        value = body()
+        return jsonify(service.program_address(
+            asset_id, value.get("new_address"), value.get("command_id")
+        ))
+
     @app.post("/v1/emergency-stop")
     def emergency():
         value = body()

@@ -47,6 +47,14 @@ class FakeStation:
         self.emergencies += 1
         return CommandResult("accepted_unverified", "emergency_stop")
 
+    def program_address(self, old_address, new_address):
+        self.calls.append(("program_address", old_address, new_address))
+        return CommandResult(
+            "confirmed", "program_address",
+            requested={"old_address": old_address, "new_address": new_address},
+            reported={"address": new_address, "cvs": {1: new_address, 29: 0}},
+        )
+
 
 def envelope(**extra):
     return {"core_session_id": "core-1", "core_epoch": 1,
@@ -90,5 +98,12 @@ def test_dcc_loopback_api_contract():
     )
     assert response.status_code == 200
     assert station.calls[-1] == ("throttle", 28, 9, "forward")
+    programmed = client.post(
+        "/v1/programming/address", headers=headers,
+        json=envelope(old_address=28, new_address=29),
+    )
+    assert programmed.status_code == 200
+    assert programmed.json["reported"]["address"] == 29
+    assert station.calls[-1] == ("program_address", 28, 29)
     assert client.post("/v1/emergency-stop", headers=headers, json={}).status_code == 200
     assert station.emergencies == 1

@@ -7,6 +7,8 @@ import pytest
 
 from mtos.control.dcc.protocol import (
     Framer,
+    encode_cv_read,
+    encode_cv_write,
     encode_function,
     encode_main_power,
     encode_throttle,
@@ -23,6 +25,7 @@ class FakeSerial:
         self.chunks = list(chunks or [])
         self.writes = []
         self.is_open = False
+        self.cvs = {1: 3, 17: 192, 18: 3, 29: 0}
 
     def open(self, port, baud_rate, timeout, write_timeout):
         self.port = port
@@ -36,7 +39,7 @@ class FakeSerial:
         if data == b"<s>":
             self.chunks.append(b"noise<iDCC-EX V-5.6.3>")
         elif data == b"<=>":
-            self.chunks.append(b"<= A MAIN>")
+            self.chunks.append(b"<= A MAIN><= B PROG>")
         elif data == b"<1 MAIN>":
             self.chunks.append(b"<p1 MAIN>")
         elif data == b"<0 MAIN>":
@@ -46,6 +49,15 @@ class FakeSerial:
             address, speed, forward = map(int, parts[1:])
             speed_byte = (129 + speed if speed else 128) if forward else (1 + speed if speed else 0)
             self.chunks.append(f"<l {address} 0 {speed_byte} 0>".encode())
+        elif data.startswith(b"<R "):
+            _, cv, callback, callback_sub = data.decode()[1:-1].split()
+            self.chunks.append(
+                f"<r{callback}|{callback_sub}|{cv} {self.cvs.get(int(cv), -1)}>".encode()
+            )
+        elif data.startswith(b"<W "):
+            _, cv, value = data.decode()[1:-1].split()
+            self.cvs[int(cv)] = int(value)
+            self.chunks.append(f"<r{cv} {value}>".encode())
 
     def close(self):
         self.is_open = False
@@ -73,8 +85,15 @@ def test_protocol_validation_framing_and_reports():
     assert encode_main_power(True) == "<1 MAIN>"
     assert encode_throttle(28, 12, "forward") == "<t 28 12 1>"
     assert encode_function(28, 68, True) == "<F 28 68 1>"
+    assert encode_cv_read(29, 7) == "<R 29 7 0>"
+    assert encode_cv_write(29, 34) == "<W 29 34>"
+    assert parse_frame("<r7|0|29 34>").data == {
+        "cv": 29, "value": 34, "callback": 7, "callback_sub": 0,
+    }
     with pytest.raises(ValueError):
         encode_throttle(28, True, "forward")
+    with pytest.raises(ValueError):
+        encode_throttle(10240, 1, "forward")
 
 
 def test_station_handshake_main_power_throttle_and_disconnect():
@@ -82,6 +101,7 @@ def test_station_handshake_main_power_throttle_and_disconnect():
     station = DccExStation(serial, response_timeout=0.01, handshake_timeout=0.05)
     assert station.connect("/dev/fake")["connection"] == "ready"
     assert station.state.main.mode == "MAIN"
+    assert station.state.prog.mode == "PROG"
     assert station.set_main_power(True).outcome == "confirmed"
     result = station.throttle(28, 12, "forward")
     assert result.outcome == "confirmed"
@@ -93,6 +113,36 @@ def test_station_handshake_main_power_throttle_and_disconnect():
     station.emergency_stop()
     assert serial.writes[-1] == "<!>"
     assert station.disconnect()["main"]["power"] == "unknown"
+
+
+def test_station_programs_and_verifies_short_and_long_addresses():
+    serial = FakeSerial()
+    station = DccExStation(serial, response_timeout=0.01, handshake_timeout=0.05)
+    station.connect("/dev/fake")
+    station.set_main_power(False)
+    short = station.program_address(3, 28)
+    assert short.outcome == "confirmed"
+    assert short.reported == {"address": 28, "cvs": {1: 28, 29: 0}}
+    long = station.program_address(28, 4202)
+    assert long.outcome == "confirmed"
+    assert long.reported == {
+        "address": 4202,
+        "cvs": {17: 208, 18: 106, 29: 32},
+    }
+
+
+def test_station_refuses_programming_without_verified_prog_or_with_main_power():
+    serial = FakeSerial()
+    station = DccExStation(serial, response_timeout=0.01, handshake_timeout=0.05)
+    station.connect("/dev/fake")
+    station.set_main_power(False)
+    station.state.prog.mode = None
+    with pytest.raises(RuntimeError, match="PROG"):
+        station.program_address(3, 28)
+    station.state.prog.mode = "PROG"
+    station.set_main_power(True)
+    with pytest.raises(RuntimeError, match="MAIN track power"):
+        station.program_address(3, 28)
 
 
 def test_emergency_write_does_not_wait_for_normal_response():
@@ -129,12 +179,16 @@ def test_service_roster_reservation_and_control_edit_guard(tmp_path):
     service = ControlService(tmp_path / "data", station)
     result = service.throttle("L001", 8, "forward", service.generation)
     assert result["outcome"] == "confirmed"
-    with pytest.raises(Conflict, match="reserved"):
-        roster.save({"revision": 1, "control": {"address": 29}}, asset_id="L001")
-    updated = roster.save({"revision": 1, "label": "Turbine"}, asset_id="L001")
+    # Asset is the authority: a reservation never vetoes an edit, even of the DCC address.
+    changed = roster.save({"revision": 1, "control": {"address": 29}}, asset_id="L001")
+    assert changed["control"]["address"] == 29
+    updated = roster.save({"revision": 2, "label": "Turbine"}, asset_id="L001")
     assert updated["label"] == "Turbine"
     stopped = service.stop("L001")
     assert stopped["generation"] != ""
+    # ...but STOP still reaches the address the loco was actually driven on.
+    assert any(w.startswith("<t 28 0") for w in serial.writes), serial.writes
+    assert not any(w.startswith("<t 29") for w in serial.writes)
     service.release("L001")
 
 

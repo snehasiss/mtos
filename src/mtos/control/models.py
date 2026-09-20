@@ -46,6 +46,7 @@ class DeviceState:
     last_seen: str | None = None
     stale: bool = True
     main: OutputState = field(default_factory=OutputState)
+    prog: OutputState = field(default_factory=OutputState)
     error: str | None = None
     locomotives: dict[str, LocoState] = field(default_factory=dict)
 

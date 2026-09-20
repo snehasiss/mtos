@@ -1316,3 +1316,35 @@ payload, and the regression test sends the same explicit null as the browser.
 The full suite passes 96 tests with one optional browser test skipped. The running
 HMI could not be restarted from the Codex process sandbox (`SIGTERM` permission
 denied); the owner must run `tools/mtos_hmi restart` once to load the fix.
+
+### 2026-09-20: Asset ownership and decoder-address programming checkpoint
+
+Asset is authoritative for asset master data, including `lifecycle.status` and
+`control.address`. An active Core lease or reservation does not veto a deliberate
+Asset edit. When an Asset edit changes the operating view, Asset invalidates the
+affected lease/projection so Core must reacquire and reconcile current data.
+This preserves the owner's ability to place a locomotive into maintenance or
+otherwise correct its inventory record without asking the operating subsystem.
+
+Decoder-address changes now have two distinct workflows. The normal operational
+workflow is `mtos_core` -> `mtos_dcc` -> EX-CSB1 PROG output -> verified decoder
+readback -> revision-checked `mtos_asset` update. Core accepts only received,
+maintenance-state, self-propelled DCC assets (`loco` or `mow`), durably records
+the old/new address and Asset revision, and keeps uncertain physical outcomes for
+reconciliation instead of retrying a write. DCC requires MAIN power to be
+confirmed off and PROG to be confirmed available. Short addresses program CV1
+and clear CV29 bit 5; long addresses program CV17/CV18 and set CV29 bit 5 while
+preserving the remaining CV29 bits. Every affected CV is read back. Supported
+addresses are 1 through 10239.
+
+Asset still permits a direct inventory-only `control.address` correction because
+it owns that field. The browser warns that this does not program or verify the
+physical decoder. This escape hatch is intentional for imports, recovery and
+manual correction; it can create a roster/decoder mismatch until reconciled.
+
+The backend APIs and fake-serial tests are implemented. The Programming tab is
+not yet enabled, and no claim is made that address programming has succeeded on
+the real EX-CSB1 or a locomotive. General CV programming remains later work.
+ADR-010 records the authoritative decision and supersedes older lease-blocking
+and wholly-deferred address-programming descriptions. No live service, database,
+serial device or locomotive was touched during this checkpoint.

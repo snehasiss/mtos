@@ -255,19 +255,18 @@ increments a monotonic fencing token per affected asset and records every lease.
 Either all requested assets are leased or none are.
 
 Core includes asset ID, revision, lease ID and fencing token in every DCC/MC
-dispatch. Adapters reject absent, expired or lower tokens than the highest already
-observed for that asset. Core renews leases every 10 seconds; the normal lease
-expires after 30 seconds without renewal. Expiry does not immediately authorize
-a conflicting control edit: Asset changes it to
-`expired_pending_reconciliation`. Protected edits remain blocked until physical
-state is reconciled and the lease is explicitly cleared. Descriptive fields and
-media remain editable. Leases and fencing counters survive restart.
+dispatch. Adapters reject absent or lower tokens than the highest already
+observed for that asset. Asset remains authoritative: a master-data edit is not
+vetoed by an operational lease. Instead, an edit to the operating view increments
+the asset revision and retires affected leases/projections so Core must re-read
+and revalidate before another ordinary command. The UI warns before removing an
+active asset that has operational holds because the edit itself cannot stop
+moving hardware. Fencing counters survive edits and restart.
 
-Asset blocks changes to DCC address, lifecycle eligibility, node membership,
-component/channel mapping, calibration, required dependencies and other protected
-configuration under a held or unreconciled lease. Address programming holds the
-same lease through hardware verification and conditional Asset update; no
-distributed transaction is claimed.
+ADR-010 governs decoder-address changes. Coordinated programming holds a lease
+through DCC hardware verification and a conditional Asset update. Asset also
+permits an explicitly warned inventory-only address correction, which makes no
+claim that the decoder was programmed. No distributed transaction is claimed.
 
 ### Core session, failure and emergency contract
 

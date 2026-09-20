@@ -49,6 +49,20 @@ def data_root():
     )
 
 
+def operating_view(value):
+    """The part of an asset that operating consumers (Core, DCC, MC) rely on."""
+    return {
+        "family": value.get("family"),
+        "type": value.get("type"),
+        "control": value.get("control"),
+        "relations": value.get("relations", []),
+        "lifecycle": {
+            key: (value.get("lifecycle") or {}).get(key)
+            for key in ("possession", "status", "location")
+        },
+    }
+
+
 class Conflict(ValueError):
     pass
 
@@ -391,6 +405,20 @@ class Roster:
         with self.connect() as db:
             return self._get(db, asset_id)
 
+    def operation_state(self, asset_id):
+        """Whether operating consumers currently hold this asset (informational)."""
+        with self.connect() as db:
+            if db.execute("SELECT 1 FROM asset WHERE id=?", (asset_id,)).fetchone() is None:
+                raise KeyError(asset_id)
+            leased = db.execute(
+                "SELECT 1 FROM asset_lease WHERE asset_id=? AND state='held' AND expires_at>?",
+                (asset_id, datetime.now(UTC).isoformat()),
+            ).fetchone()
+            reserved = db.execute(
+                "SELECT 1 FROM control_reservation WHERE asset_id=?", (asset_id,)
+            ).fetchone()
+        return {"leased": bool(leased), "reserved": bool(reserved)}
+
     def search(self, q="", family="", status="", limit=50, offset=0):
         limit = max(1, min(int(limit), 100))
         offset = max(0, int(offset))
@@ -417,7 +445,7 @@ class Roster:
                 "offset": offset,
             }
 
-    def save(self, payload, *, asset_id=None):
+    def save(self, payload, *, asset_id=None, verified_address_change=False):
         if not isinstance(payload, dict):
             raise ValueError("JSON body must be an object")
         with self.transaction() as db:
@@ -447,25 +475,16 @@ class Roster:
                     raise Conflict("Asset ID already exists")
             item = validate(merged)
             aid = item["id"]
-            if asset_id and (
-                db.execute("SELECT 1 FROM control_reservation WHERE asset_id=?", (aid,)).fetchone()
-                or db.execute(
-                    "SELECT 1 FROM asset_lease WHERE asset_id=? AND state='held' AND expires_at>?",
-                    (aid, datetime.now(UTC).isoformat()),
-                ).fetchone()
+            old_address = (old.get("control") or {}).get("address") if asset_id else None
+            new_address = (item.get("control") or {}).get("address")
+            if verified_address_change and (
+                not asset_id or old_address == new_address
             ):
-                protected = lambda value: {
-                    "family": value.get("family"),
-                    "type": value.get("type"),
-                    "control": value.get("control"),
-                    "relations": value.get("relations", []),
-                    "lifecycle": {
-                        key: value.get("lifecycle", {}).get(key)
-                        for key in ("possession", "status", "location")
-                    },
-                }
-                if protected(old) != protected(item):
-                    raise Conflict("Asset control configuration is reserved for operation")
+                raise ValueError("verified address update requires a changed address")
+            # Asset is the authority. Operational records held by consumers never
+            # block an edit; if what a consumer relies on changed, retire them and
+            # let followers re-acquire against the new revision.
+            operating_changed = bool(asset_id) and operating_view(old) != operating_view(item)
             timestamp = now()
             if asset_id:
                 db.execute(
@@ -561,6 +580,14 @@ class Roster:
                     json.dumps(life.get("acquisition", {})),
                 ),
             )
+            if operating_changed:
+                # asset_fence is kept, so the next lease gets a higher fencing token.
+                db.execute("DELETE FROM asset_lease WHERE asset_id=?", (aid,))
+                # A reservation also records the DCC address the locomotive is really
+                # being driven on, which STOP must keep targeting. Retire it unless
+                # this edit changed that address.
+                if old_address == new_address or verified_address_change:
+                    db.execute("DELETE FROM control_reservation WHERE asset_id=?", (aid,))
             self._validate_links(db)
             return self._get(db, aid)
 

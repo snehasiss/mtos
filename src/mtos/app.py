@@ -139,6 +139,10 @@ def create_app(config=None):
     def get(asset_id):
         return jsonify(roster.get(asset_id))
 
+    @app.get("/api/assets/<asset_id>/operation")
+    def operation(asset_id):
+        return jsonify(roster.operation_state(asset_id))
+
     @app.patch("/api/assets/<asset_id>")
     def update(asset_id):
         return jsonify(roster.save(request.get_json(), asset_id=asset_id))
@@ -227,6 +231,21 @@ def create_app(config=None):
             value.get("asset_ids"), value.get("expected_revisions") or {},
             value.get("core_session_id"), value.get("core_epoch"), value.get("purpose"),
             value.get("duration_seconds", 30),
+        ))
+
+    @app.patch("/internal/assets/<asset_id>/programmed-address")
+    def programmed_address(asset_id):
+        supplied = request.headers.get("X-MTOS-Internal-Token", "")
+        if not hmac.compare_digest(supplied, app.config["INTERNAL_TOKEN"]):
+            abort(403)
+        value = request.get_json()
+        address = value.get("address")
+        if type(address) is not int or not 1 <= address <= 10239:
+            raise ValueError("address must be an integer from 1 through 10239")
+        return jsonify(roster.save(
+            {"revision": value.get("revision"), "control": {"address": address}},
+            asset_id=asset_id,
+            verified_address_change=True,
         ))
 
     @app.patch("/api/consists/<consist_id>")

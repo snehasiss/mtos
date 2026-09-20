@@ -1,6 +1,6 @@
 # mtos_core module checkpoint
 
-Date: 2026-09-18. Status: implemented for DCC MAIN and the hardware-free MC path.
+Date: 2026-09-20. Status: DCC MAIN and address-programming orchestration implemented; MC remains hardware-free.
 
 `mtos_core` is the sole operational authority on `127.0.0.1:5303`. It owns a
 separate `data/db/core.sqlite3` journal and reservation projection. It does not
@@ -31,6 +31,14 @@ The internal API exposes start/readiness/state, heartbeat, MAIN power, throttle,
 functions, locomotive stop, emergency stop, resume, stationary-asset lists and
 typed turnout/signal/machine commands. It requires the internal token and has no
 browser UI.
+
+For `POST /v1/assets/<asset_id>/program-address`, Core requires a received,
+maintenance-state, DCC-equipped `loco` or `mow`. It journals the old/new address
+and asset revision, acquires the Asset lease, asks DCC to program and verify the
+decoder, and only after confirmed readback calls Asset's conditional programmed-
+address endpoint. Hardware success followed by an Asset revision/update failure
+is recorded as `uncertain` with both addresses and hardware evidence; it is never
+reported as a successful rollback or automatically retried.
 
 Run it with:
 

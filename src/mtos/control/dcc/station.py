@@ -18,6 +18,8 @@ from ..models import (
 from .protocol import (
     Framer,
     encode_emergency_stop,
+    encode_cv_read,
+    encode_cv_write,
     encode_function,
     encode_main_power,
     encode_throttle,
@@ -40,12 +42,13 @@ class DccExStation:
         self.state = DeviceState()
         self._state_lock = threading.RLock()
         self._changed = threading.Condition(self._state_lock)
-        self._operation_lock = threading.Lock()
+        self._operation_lock = threading.RLock()
         self._write_lock = threading.Lock()
         self._running = threading.Event()
         self._reader = None
         self._events = deque(maxlen=256)
         self._event_sequence = 0
+        self._program_callback = 0
         self._framer = Framer()
 
     def snapshot(self):
@@ -146,6 +149,57 @@ class DccExStation:
             loco.desired_functions[str(number)] = active
         return result
 
+    def read_cv(self, cv):
+        callback = self._next_program_callback()
+        event = self._program_request(
+            encode_cv_read(cv, callback),
+            lambda candidate: candidate.kind == "cv"
+            and candidate.data.get("cv") == cv
+            and candidate.data.get("callback") == callback,
+        )
+        value = event.data["value"]
+        if value < 0:
+            raise RuntimeError(f"Decoder did not acknowledge CV {cv}")
+        return value
+
+    def write_cv(self, cv, value):
+        event = self._program_request(
+            encode_cv_write(cv, value),
+            lambda candidate: candidate.kind == "cv"
+            and candidate.data.get("cv") == cv,
+        )
+        if event.data.get("value") != value:
+            raise RuntimeError(f"Decoder did not confirm writing CV {cv}")
+        return value
+
+    def program_address(self, old_address, new_address):
+        with self._operation_lock:
+            _ = old_address  # Service-mode programming is address-independent.
+            if type(new_address) is not int or not 1 <= new_address <= 10239:
+                raise ValueError("new DCC address must be from 1 through 10239")
+            cv29 = self.read_cv(29)
+            if new_address <= 127:
+                expected = {1: new_address, 29: cv29 & ~0x20}
+                self.write_cv(1, expected[1])
+                self.write_cv(29, expected[29])
+            else:
+                expected = {
+                    17: 192 + (new_address // 256),
+                    18: new_address % 256,
+                    29: cv29 | 0x20,
+                }
+                self.write_cv(17, expected[17])
+                self.write_cv(18, expected[18])
+                self.write_cv(29, expected[29])
+            verified = {cv: self.read_cv(cv) for cv in expected}
+            if verified != expected:
+                raise RuntimeError("Decoder address readback did not match the requested address")
+            return CommandResult(
+                "confirmed", "program_address",
+                requested={"old_address": old_address, "new_address": new_address},
+                reported={"address": new_address, "cvs": verified},
+            )
+
     def stop(self, address, direction):
         return self.throttle(address, 0, direction)
 
@@ -183,8 +237,27 @@ class DccExStation:
         with self._write_lock:
             self.transport.write(frame.encode("ascii"))
 
-    def _wait_for(self, matcher, marker):
-        deadline = time.monotonic() + self.response_timeout
+    def _program_request(self, frame, matcher):
+        with self._operation_lock:
+            self._require_ready()
+            if self.state.main.power != PowerState.OFF:
+                raise RuntimeError("MAIN track power must be confirmed off before service-mode programming")
+            if self.state.prog.mode != "PROG":
+                raise RuntimeError("A PROG output was not verified")
+            marker = self._event_sequence
+            self._write(frame)
+            event = self._wait_for(matcher, marker, timeout=15.0)
+            if event is None:
+                raise TimeoutError("EX-CSB1 did not confirm the programming command")
+            return event
+
+    def _next_program_callback(self):
+        with self._state_lock:
+            self._program_callback = self._program_callback % 32767 + 1
+            return self._program_callback
+
+    def _wait_for(self, matcher, marker, timeout=None):
+        deadline = time.monotonic() + (self.response_timeout if timeout is None else timeout)
         with self._changed:
             while time.monotonic() < deadline:
                 for sequence, event in self._events:
@@ -223,6 +296,9 @@ class DccExStation:
                 elif event.kind == "track" and event.data["mode"].startswith("MAIN"):
                     self.state.main.letter = event.data["letter"]
                     self.state.main.mode = event.data["mode"]
+                elif event.kind == "track" and event.data["mode"] == "PROG":
+                    self.state.prog.letter = event.data["letter"]
+                    self.state.prog.mode = event.data["mode"]
                 elif event.kind == "locomotive":
                     data = event.data
                     key = str(data["address"])

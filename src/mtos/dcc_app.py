@@ -117,6 +117,16 @@ def create_dcc_app(config=None):
         value = body()
         return jsonify(service.execute(value, "stop", lambda: service.station.stop(address, value.get("direction", "forward"))))
 
+    @app.post("/v1/programming/address")
+    def program_address():
+        value = body()
+        old_address, new_address = value.get("old_address"), value.get("new_address")
+        return jsonify(service.execute(
+            value,
+            "program_address",
+            lambda: service.station.program_address(old_address, new_address),
+        ))
+
     @app.post("/v1/emergency-stop")
     def emergency():
         return jsonify(service.emergency_stop())

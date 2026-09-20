@@ -126,6 +126,9 @@ The owned scale model is `model`; the represented 1:1 railway subject is
 
 `control` is configuration, not live control state. DCC equipment uses `dcc: true`.
 DCC address kind is derived: 1 through 127 is short and 128 or greater is long.
+Supported decoder addresses are 1 through 10239. Asset owns the persisted
+`control.address`; ADR-010 distinguishes the coordinated Core/DCC programming
+path from an explicitly warned inventory-only correction in the Asset UI.
 Stationary assets omit `dcc` and reference a control node. There is no generic
 node-local `control.address`; physical wiring belongs to components.
 

@@ -16,7 +16,7 @@ class JsonClient:
         self.base_url = base_url.rstrip("/")
         self.token = token
 
-    def request(self, method, path, payload=None):
+    def request(self, method, path, payload=None, *, timeout=2):
         data = None if payload is None else json.dumps(payload).encode()
         request = urllib.request.Request(
             self.base_url + path,
@@ -25,7 +25,7 @@ class JsonClient:
             headers={"Content-Type": "application/json", "X-MTOS-Internal-Token": self.token},
         )
         try:
-            with urllib.request.urlopen(request, timeout=2) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.load(response)
         except urllib.error.HTTPError as error:
             try:
@@ -55,6 +55,9 @@ class DccClient(JsonClient):
 
     def devices(self):
         return self.request("GET", "/v1/devices")["items"]
+
+    def program_address(self, envelope):
+        return self.request("POST", "/v1/programming/address", envelope, timeout=100)
 
 
 class McClient(JsonClient):
@@ -94,3 +97,9 @@ class AssetClient(JsonClient):
 
     def stationary(self):
         return self.request("GET", "/internal/operating-stationary-assets")["items"]
+
+    def update_programmed_address(self, asset_id, revision, address):
+        return self.request(
+            "PATCH", f"/internal/assets/{asset_id}/programmed-address",
+            {"revision": revision, "address": address},
+        )

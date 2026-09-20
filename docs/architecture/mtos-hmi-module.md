@@ -36,4 +36,6 @@ state to connected browsers. Turnout, signal and machine tabs route typed
 commands through Core to `mtos_mc`; they remain disabled unless MQTT is connected
 and the selected node reports a compatible, configuration-matched ready state.
 This path is covered by fake-transport tests but is not hardware-commissioned.
-CV/PROG remains deferred.
+The coordinated decoder-address programming backend now exists behind Core and
+DCC, but HMI still exposes no live Programming workflow. General CV/PROG remains
+deferred, and the address path is not hardware-commissioned.

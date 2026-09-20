@@ -1,6 +1,6 @@
 # mtos_dcc module checkpoint
 
-Date: 2026-09-18. Status: integrated through Core for Phase 1 MAIN operation.
+Date: 2026-09-20. Status: MAIN integrated; guarded address-programming backend implemented but not physically commissioned.
 
 `mtos_dcc` is the EX-CSB1 hardware abstraction on `127.0.0.1:5304`. It owns
 serial discovery, exactly one command-station connection, DCC-EX framing/parsing,
@@ -30,4 +30,13 @@ tools/mtos_dcc stop
 
 Fake-station tests cover session fencing, stale-token rejection, watchdog stop,
 authentication and typed command projection. Real EX-CSB1 commissioning remains
-supervised and was not performed at this checkpoint. CV/PROG remains Phase 2.
+supervised and was not performed at this checkpoint.
+
+The Phase 2 backend now also parses CV replies and exposes one bounded
+`POST /v1/programming/address` operation. It requires a verified PROG output and
+MAIN power off, serializes the whole address transaction, preserves unrelated
+CV29 bits, writes the short or long address CVs, and reads every affected CV back.
+It does not update Asset; only Core may request the conditional Asset commit.
+Timeouts are not retried. The HMI programming screen and real decoder test remain
+pending, so this is an implemented/tested software contract rather than hardware
+commissioning evidence.

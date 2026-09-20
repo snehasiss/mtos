@@ -162,6 +162,8 @@ class Control:
                 raise ValueError("dcc control cannot reference an accessory node")
             if self.address is not None and self.address < 1:
                 raise ValueError("dcc address must be positive")
+            if self.address is not None and self.address > 10239:
+                raise ValueError("dcc address must not exceed 10239")
         elif any(
             value is not None
             for value in (self.decoder, self.address, self.speed_steps, self.sound)

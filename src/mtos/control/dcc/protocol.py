@@ -36,8 +36,8 @@ class Framer:
 
 
 def _address(address):
-    if type(address) is not int or not 1 <= address <= 10293:
-        raise ValueError("DCC address must be between 1 and 10293")
+    if type(address) is not int or not 1 <= address <= 10239:
+        raise ValueError("DCC address must be between 1 and 10239")
 
 
 def encode_main_power(on: bool) -> str:
@@ -64,6 +64,24 @@ def encode_function(address: int, number: int, active: bool) -> str:
     return f"<F {address} {number} {1 if active else 0}>"
 
 
+def encode_cv_read(cv: int, callback: int, callback_sub: int = 0) -> str:
+    if type(cv) is not int or not 1 <= cv <= 1024:
+        raise ValueError("CV must be an integer from 1 through 1024")
+    if type(callback) is not int or not 0 <= callback <= 32767:
+        raise ValueError("callback must be an integer from 0 through 32767")
+    if type(callback_sub) is not int or not 0 <= callback_sub <= 32767:
+        raise ValueError("callback_sub must be an integer from 0 through 32767")
+    return f"<R {cv} {callback} {callback_sub}>"
+
+
+def encode_cv_write(cv: int, value: int) -> str:
+    if type(cv) is not int or not 1 <= cv <= 1024:
+        raise ValueError("CV must be an integer from 1 through 1024")
+    if type(value) is not int or not 0 <= value <= 255:
+        raise ValueError("CV value must be an integer from 0 through 255")
+    return f"<W {cv} {value}>"
+
+
 def encode_emergency_stop() -> str:
     return "<!>"
 
@@ -80,6 +98,21 @@ def parse_frame(frame: str) -> ProtocolEvent:
     match = re.fullmatch(r"=\s*([A-H])\s+([A-Z_]+)(?:\s+\d+)?", body, re.I)
     if match:
         return ProtocolEvent("track", {"letter": match[1].upper(), "mode": match[2].upper()}, frame)
+    if body.startswith("r"):
+        parts = body[1:].strip().split()
+        try:
+            if len(parts) == 2 and "|" in parts[0]:
+                callback, callback_sub, cv = parts[0].split("|")
+                return ProtocolEvent(
+                    "cv",
+                    {"cv": int(cv), "value": int(parts[1]),
+                     "callback": int(callback), "callback_sub": int(callback_sub)},
+                    frame,
+                )
+            if len(parts) == 2:
+                return ProtocolEvent("cv", {"cv": int(parts[0]), "value": int(parts[1])}, frame)
+        except ValueError:
+            pass
     parts = body.split()
     if len(parts) >= 5 and parts[0] == "l":
         try:

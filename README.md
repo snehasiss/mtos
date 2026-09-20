@@ -32,10 +32,12 @@ and `mtos_dcc` are integrated. `mtos_mc`, its Core/HMI path and ESP32 firmware
 source are implemented against fakes; real EX-CSB1 and accessory electronics
 commissioning remain pending.
 
-Current limitations are explicit: CV/PROG, occupancy, routes, interlocking,
-autonomy, systemd deployment, history pruning and physical EX-CSB1/ESP32
-commissioning are not complete. Accessory controls stay disabled while MQTT or
-the selected node is not ready.
+Current limitations are explicit: the coordinated backend for decoder-address
+programming exists, but its HMI and physical EX-CSB1/decoder commissioning are
+not complete. General CV programming, occupancy, routes, interlocking, autonomy,
+systemd deployment, history pruning and physical ESP32 commissioning also remain
+incomplete. Accessory controls stay disabled while MQTT or the selected node is
+not ready.
 
 ## Run mtos_asset
 

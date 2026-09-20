@@ -182,7 +182,7 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     assert client.get("/api/assets?q=Test").json["total"] == 1
 
 
-def test_asset_control_lease_is_atomic_renewable_and_protects_configuration(tmp_path):
+def test_asset_control_lease_is_atomic_renewable_and_asset_edits_release_it(tmp_path):
     app = create_app({"DATA_ROOT": tmp_path / "data", "TESTING": True, "INTERNAL_TOKEN": "secret"})
     roster = app.extensions["roster"]
     asset = roster.save(loco(
@@ -227,15 +227,45 @@ def test_asset_control_lease_is_atomic_renewable_and_protects_configuration(tmp_
         "/api/assets/L001", headers={"X-CSRF-Token": token},
         json={"revision": asset["revision"], "control": {"dcc": True, "address": 29}},
     )
-    assert changed.status_code == 409
+    assert changed.status_code == 200  # Asset is the authority; a hold never vetoes an edit
+    assert changed.json["revision"] == asset["revision"] + 1
+    with roster.connect() as db:
+        assert db.execute("SELECT count(*) FROM asset_lease").fetchone()[0] == 0
     descriptive = client.patch(
         "/api/assets/L001", headers={"X-CSRF-Token": token},
-        json={"revision": asset["revision"], "label": "Still editable"},
+        json={"revision": changed.json["revision"], "label": "Still editable"},
     )
     assert descriptive.status_code == 200
     locomotives = client.get("/internal/operating-locomotives", headers=internal)
     assert locomotives.status_code == 200
     assert locomotives.json["items"][0]["id"] == "L001"
+    assert locomotives.json["items"][0]["address"] == 29
+
+
+def test_internal_programmed_address_update_is_authenticated_and_revision_checked(tmp_path):
+    app = create_app({"DATA_ROOT": tmp_path / "data", "TESTING": True, "INTERNAL_TOKEN": "secret"})
+    roster = app.extensions["roster"]
+    roster.save(loco(
+        control={"dcc": True, "address": 3},
+        lifecycle={"possession": "received", "status": "maintenance"},
+    ))
+    client = app.test_client()
+    path = "/internal/assets/L001/programmed-address"
+    assert client.patch(path, json={"revision": 1, "address": 28}).status_code == 403
+    updated = client.patch(
+        path,
+        headers={"X-MTOS-Internal-Token": "secret"},
+        json={"revision": 1, "address": 28},
+    )
+    assert updated.status_code == 200
+    assert updated.json["control"]["address"] == 28
+    assert updated.json["revision"] == 2
+    stale = client.patch(
+        path,
+        headers={"X-MTOS-Internal-Token": "secret"},
+        json={"revision": 1, "address": 29},
+    )
+    assert stale.status_code == 409
 
 
 def test_backup_restores_database_and_media_and_detects_corruption(roster, tmp_path):
@@ -365,28 +395,87 @@ def test_confirmed_legacy_lifecycle_corrections(
     )
 
 
-def _leased_active_loco(roster):
-    roster.save(
-        loco(lifecycle={"possession": "received", "status": "active", "location": "main_west_1"})
-    )
-    roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle", duration_seconds=5)
 
-
-def test_live_lease_blocks_status_change(roster):
-    _leased_active_loco(roster)
-    with pytest.raises(Conflict, match="reserved for operation"):
-        roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
-
-
-def test_expired_lease_does_not_block_status_change(roster):
+def _operating_loco(roster):
+    """An active DCC loco that Core holds (lease) and the control service reserved."""
     import sqlite3
 
-    _leased_active_loco(roster)
+    roster.save(
+        loco(
+            lifecycle={"possession": "received", "status": "active", "location": "main_west_1"},
+            control={"dcc": True, "address": 46},
+        )
+    )
+    lease = roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle")[0]
+    with sqlite3.connect(roster.database) as db:
+        db.execute(
+            "INSERT INTO control_reservation VALUES('L001','ctl-session-1',46,'hash','held',"
+            "'2026-01-01T00:00:00+00:00','2026-01-01T00:00:00+00:00')"
+        )
+    return lease
+
+
+def _holds(roster):
+    import sqlite3
+
+    with sqlite3.connect(roster.database) as db:
+        return (
+            db.execute("SELECT count(*) FROM asset_lease").fetchone()[0],
+            db.execute("SELECT count(*) FROM control_reservation").fetchone()[0],
+        )
+
+
+@pytest.mark.parametrize("status", ["parked", "maintenance", "stored", "retired"])
+def test_asset_status_change_is_never_blocked_by_operating_holds(roster, status):
+    _operating_loco(roster)
+    saved = roster.save({"revision": 1, "lifecycle": {"status": status}}, asset_id="L001")
+    assert saved["lifecycle"]["status"] == status
+    assert saved["revision"] == 2
+    assert _holds(roster) == (0, 0)  # followers must re-acquire; nothing stays orphaned
+
+
+def test_status_change_releases_orphaned_reservation_and_lease(roster):
+    """A reservation left by a dead control session must not pin the asset."""
+    _operating_loco(roster)
+    import sqlite3
+
     with sqlite3.connect(roster.database) as db:
         db.execute("UPDATE asset_lease SET expires_at='2000-01-01T00:00:00+00:00'")
-    saved = roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
-    assert saved["lifecycle"]["status"] == "parked"
-    assert saved["revision"] == 2
-    # a lease taken against the old revision can no longer be acquired
+    roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
+    assert _holds(roster) == (0, 0)
+
+
+def test_release_keeps_fencing_monotonic_and_invalidates_old_revision(roster):
+    old = _operating_loco(roster)
+    roster.save({"revision": 1, "lifecycle": {"status": "parked"}}, asset_id="L001")
+    roster.save({"revision": 2, "lifecycle": {"status": "active"}}, asset_id="L001")
     with pytest.raises(Conflict, match="revision changed"):
         roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle")
+    fresh = roster.acquire_leases(["L001"], {"L001": 3}, "core-1", 1, "throttle")[0]
+    assert fresh["fencing_token"] > old["fencing_token"]
+
+
+def test_edit_that_does_not_touch_operating_config_keeps_holds(roster):
+    _operating_loco(roster)
+    roster.save({"revision": 1, "label": "Cab unit"}, asset_id="L001")
+    assert _holds(roster) == (1, 1)
+
+
+def test_operation_endpoint_reports_holds(tmp_path):
+    app = create_app({"DATA_ROOT": str(tmp_path / "data"), "TESTING": True})
+    roster = app.extensions["roster"]
+    client = app.test_client()
+    roster.save(loco(lifecycle={"possession": "received", "status": "active", "location": "main_west_1"}))
+    assert client.get("/api/assets/L001/operation").get_json() == {"leased": False, "reserved": False}
+    roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle")
+    assert client.get("/api/assets/L001/operation").get_json() == {"leased": True, "reserved": False}
+    assert client.get("/api/assets/L999/operation").status_code == 404
+
+
+def test_address_change_retires_lease_but_keeps_reservation_for_stop(roster):
+    """STOP must keep targeting the address the decoder is actually answering on."""
+    _operating_loco(roster)
+    roster.save(
+        {"revision": 1, "control": {"dcc": True, "address": 47}}, asset_id="L001"
+    )
+    assert _holds(roster) == (0, 1)

@@ -125,3 +125,7 @@ class CoreRepository:
         with self.connect() as db:
             row = db.execute("SELECT * FROM reservation WHERE asset_id=?", (asset_id,)).fetchone()
             return dict(row) if row else None
+
+    def release(self, asset_id):
+        with self.connect() as db:
+            db.execute("DELETE FROM reservation WHERE asset_id=?", (asset_id,))
