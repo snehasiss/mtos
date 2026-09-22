@@ -110,8 +110,8 @@ account and address:
 
 ```sshconfig
 Host mtos-backup
-    HostName 192.168.0.100
-    User backup
+    HostName 192.168.1.97
+    User snehasis
     IdentityFile ~/.ssh/mtos_backup
     IdentitiesOnly yes
 ```
@@ -132,18 +132,20 @@ accept its host key during this manual setup. Finally verify that future login
 cannot prompt for a password:
 
 ```bash
-sudo -u mtos -H ssh mtos-backup 'mkdir -p /srv/backups/mtos'
+sudo -u mtos -H ssh mtos-backup 'mkdir -p /Users/snehasis/project/backup-cubietruck-mtos-data'
 sudo -u mtos -H ssh -o BatchMode=yes mtos-backup true
 ```
 
-The UI accepts an absolute remote destination such as:
+Set the fixed remote destination in `/etc/mtos/admin.env` (see below). The
+administration page displays it but does not accept a destination from the
+browser. For this Cubietruck and iMac, use:
 
 ```text
-backup@mtos-backup:/srv/backups/mtos
+snehasis@mtos-backup:/Users/snehasis/project/backup-cubietruck-mtos-data
 ```
 
-MTOS synchronizes the complete project `data/` directory to
-`backup@mtos-backup:/srv/backups/mtos/data/`. The operation uses `--delete`, so
+MTOS synchronizes the complete project `data/` directory to the configured
+destination's `data/` subdirectory. The operation uses `--delete`, so
 that remote directory is an exact mirror. Do not point it at a directory that
 contains unrelated files. Configure snapshots on the backup host if historical
 versions are required.
@@ -164,6 +166,7 @@ MTOS_ADMIN_TOKEN=replace-with-a-long-login-token
 MTOS_ADMIN_SECRET=replace-with-a-separate-random-session-secret
 MTOS_INTERNAL_TOKEN=replace-with-a-third-random-internal-token
 MTOS_DATA_DIR=/home/mtos/project/mtos/data
+MTOS_BACKUP_REMOTE=snehasis@mtos-backup:/Users/snehasis/project/backup-cubietruck-mtos-data
 ```
 
 `MTOS_ADMIN_TOKEN` is entered in the browser. `MTOS_ADMIN_SECRET` signs the
@@ -216,7 +219,9 @@ journalctl -u mtos-admin.service -f
 - Restore first validates the downloaded SQLite databases. On success, the old
   local data remains beside `data/` as `data.before-restore-<UTC timestamp>`.
 - Application update is refused if the Cubietruck checkout has local changes.
-  It fetches and checks out the requested branch or tag but never commits.
+  The administration page shows the checkout's `origin` repository; updates
+  always fetch and check out `main`, then fast-forward from `origin/main`.
+  No commit is created.
 - The systemd unit restarts `mtos_admin` after a process failure; it does not
   start the other MTOS services.
 

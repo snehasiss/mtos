@@ -26,7 +26,10 @@ def create_admin_app(config=None):
     if not app.config["ADMIN_TOKEN"] or not app.config["SECRET_KEY"]:
         raise RuntimeError("MTOS_ADMIN_TOKEN and MTOS_ADMIN_SECRET are required")
     root = Path(app.config.get("PROJECT_ROOT", Path(__file__).resolve().parents[2]))
-    service = app.config.get("ADMIN_SERVICE") or AdminService(root, app.config.get("DATA_ROOT", data_root()))
+    service = app.config.get("ADMIN_SERVICE") or AdminService(
+        root, app.config.get("DATA_ROOT", data_root()),
+        backup_remote=app.config.get("BACKUP_REMOTE", os.environ.get("MTOS_BACKUP_REMOTE")),
+    )
     app.extensions["admin_service"] = service
 
     @app.errorhandler(Exception)
