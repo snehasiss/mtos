@@ -2,42 +2,111 @@
 
 `mtos_admin` is the only MTOS service intended to start with the operating
 system. It listens on port 5300 and controls the five-service application stack.
+The system unit and every application service run as the dedicated, non-login
+`mtos` account. `snehasis` remains the human SSH and system-administration user.
 
 ## Prerequisites
 
-After the reviewed source has been committed and pushed from the development
-computer, update the Cubietruck checkout and install its runtime tools and
-Python packages. This installation uses Debian's system Python and no project
-virtual environment:
+Install the host packages as the human administrator:
 
 ```bash
 sudo apt update
 sudo apt install git openssh-client rsync python3 python3-pip python3-full build-essential
-cd ~/project/mtos
-git pull --ff-only
-python3 -m pip install --user -r requirements.txt
-python3 -m pip install --user -e .
 ```
 
-Before installing the service, run the hardware-free suite on the ARMv7 host:
+Create the service identity with its own home but no interactive login shell,
+grant serial-device access, and create its project parent:
 
 ```bash
-python3 -m pip install --user -e '.[dev]'
-python3 -m pytest -q
+sudo useradd --system --create-home --home-dir /home/mtos \
+  --shell /usr/sbin/nologin mtos
+sudo usermod -aG dialout mtos
+sudo install -d -o mtos -g mtos /home/mtos/project
 ```
+
+If `mtos` already exists, inspect it instead of recreating it:
+
+```bash
+getent passwd mtos
+id mtos
+```
+
+The service account uses Debian's system Python with user-site packages and no
+project virtual environment. Create `/home/mtos/.config/pip/pip.conf`, owned by
+`mtos:mtos`, with:
+
+```ini
+[global]
+break-system-packages = true
+user = true
+```
+
+One safe way to create the parent and empty file before editing is:
+
+```bash
+sudo install -d -o mtos -g mtos /home/mtos/.config/pip
+sudo install -o mtos -g mtos -m 0644 /dev/null \
+  /home/mtos/.config/pip/pip.conf
+sudoedit /home/mtos/.config/pip/pip.conf
+```
+
+After the reviewed source has been committed and pushed from the development
+computer, clone and install it as the service account:
+
+```bash
+sudo -u mtos -H git clone \
+  https://github.com/snehasiss/mtos.git /home/mtos/project/mtos
+cd /home/mtos/project/mtos
+sudo -u mtos -H python3 -m pip install --user -r requirements.txt
+sudo -u mtos -H python3 -m pip install --user -e .
+```
+
+Before installing the service, run the hardware-free suite as that same account:
+
+```bash
+cd /home/mtos/project/mtos
+sudo -u mtos -H python3 -m pip install --user -e '.[dev]'
+sudo -u mtos -H python3 -m pytest -q
+```
+
+The checkout, `data/` tree, user-site Python packages and all runtime files must
+remain owned by `mtos`. The account receives no sudo privilege and no password.
+
+### Move an existing test installation
+
+If Asset Manager was already tested from
+`/home/snehasis/project/mtos`, stop every old process before moving operational
+data. Clone the reviewed source afresh as shown above; do not change ownership of
+the development checkout or copy its `.git` directory. Then copy only the live
+data into the service-owned installation:
+
+```bash
+cd /home/snehasis/project/mtos
+tools/mtos_services stop
+tools/mtos_asset stop
+sudo install -d -o mtos -g mtos /home/mtos/project/mtos/data
+sudo rsync -a /home/snehasis/project/mtos/data/ \
+  /home/mtos/project/mtos/data/
+sudo chown -R mtos:mtos /home/mtos/project/mtos/data
+```
+
+Confirm that no process still runs from the old checkout. Retain the old data
+unchanged until the new service-owned installation has passed its database and
+UI checks.
 
 ## Configure the outbound backup connection
 
-The SSH key used by the development iMac to enter the Cubietruck does not grant
-the Cubietruck access to a backup host. Create a dedicated outbound key as the
-normal MTOS operating user:
+The SSH key used by the development iMac to enter the Cubietruck as `snehasis`
+does not grant the `mtos` service account access to a backup host. Create a
+dedicated outbound key owned by `mtos`:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/mtos_backup -C mtos-backup
+sudo -u mtos -H ssh-keygen -t ed25519 \
+  -f /home/mtos/.ssh/mtos_backup -C mtos-backup
 ```
 
-Configure a host alias in `~/.ssh/config`; substitute the actual host, account
-and address:
+Configure a host alias in `/home/mtos/.ssh/config`; substitute the actual host,
+account and address:
 
 ```sshconfig
 Host mtos-backup
@@ -50,10 +119,12 @@ Host mtos-backup
 Protect the files and authorize the public key on the backup host:
 
 ```bash
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/config ~/.ssh/mtos_backup
-chmod 644 ~/.ssh/mtos_backup.pub
-ssh-copy-id -i ~/.ssh/mtos_backup.pub mtos-backup
+sudo chown -R mtos:mtos /home/mtos/.ssh
+sudo chmod 700 /home/mtos/.ssh
+sudo chmod 600 /home/mtos/.ssh/config /home/mtos/.ssh/mtos_backup
+sudo chmod 644 /home/mtos/.ssh/mtos_backup.pub
+sudo -u mtos -H ssh-copy-id \
+  -i /home/mtos/.ssh/mtos_backup.pub mtos-backup
 ```
 
 Install `rsync` on the backup host, create the intended remote directory, and
@@ -61,8 +132,8 @@ accept its host key during this manual setup. Finally verify that future login
 cannot prompt for a password:
 
 ```bash
-ssh mtos-backup 'mkdir -p /srv/backups/mtos'
-ssh -o BatchMode=yes mtos-backup true
+sudo -u mtos -H ssh mtos-backup 'mkdir -p /srv/backups/mtos'
+sudo -u mtos -H ssh -o BatchMode=yes mtos-backup true
 ```
 
 The UI accepts an absolute remote destination such as:
@@ -92,7 +163,7 @@ installation-specific values and the actual project path:
 MTOS_ADMIN_TOKEN=replace-with-a-long-login-token
 MTOS_ADMIN_SECRET=replace-with-a-separate-random-session-secret
 MTOS_INTERNAL_TOKEN=replace-with-a-third-random-internal-token
-MTOS_DATA_DIR=/home/snehasis/project/mtos/data
+MTOS_DATA_DIR=/home/mtos/project/mtos/data
 ```
 
 `MTOS_ADMIN_TOKEN` is entered in the browser. `MTOS_ADMIN_SECRET` signs the
@@ -112,9 +183,8 @@ From the repository root, instantiate the supplied unit template without
 changing the checked-in template:
 
 ```bash
-cd ~/project/mtos
+cd /home/mtos/project/mtos
 sed \
-  -e "s|MTOS_USER|$USER|g" \
   -e "s|MTOS_PROJECT_ROOT|$PWD|g" \
   deploy/systemd/mtos-admin.service | \
   sudo tee /etc/systemd/system/mtos-admin.service >/dev/null
@@ -152,5 +222,6 @@ journalctl -u mtos-admin.service -f
 
 For local diagnostics, the same admin process can be controlled manually with
 `tools/mtos_admin start|stop|restart|status`, provided the Admin token, session
-secret and internal token environment variables are present. Normal Cubietruck
-operation should use systemd.
+secret and internal token environment variables are present. Run such diagnostics
+as `mtos`, not as the human administrator. Normal Cubietruck operation should
+use systemd.

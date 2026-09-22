@@ -19,8 +19,10 @@ installation is validated.
 
 1. Install the current Armbian Debian 13 Minimal image for Cubietruck on a new
    microSD card. Do not attempt an in-place upgrade of the old Linaro system.
-2. Run the board headlessly and use the normal non-root `snehasis` account for
-   the repository, data and MTOS processes.
+2. Run the board headlessly. Use the normal non-root `snehasis` account only for
+   human SSH and system administration. A dedicated non-login `mtos` system
+   account owns the deployed repository, data, Python user site and MTOS
+   processes, including `mtos_admin`.
 3. Use Debian's system Python, provided it is Python 3.11 or newer. Install MTOS
    runtime dependencies for that interpreter from `requirements.txt`; do not
    create `.venv` on this host.
@@ -42,18 +44,18 @@ installation is validated.
    sudo apt update
    sudo apt full-upgrade
    sudo apt install git python3 python3-pip python3-full build-essential
-   python3 -m pip install --user -r requirements.txt
-   python3 -m pip install --user -e .
+   sudo -u mtos -H python3 -m pip install --user -r requirements.txt
+   sudo -u mtos -H python3 -m pip install --user -e .
    ```
 
-6. Add the operating user to `dialout` for EX-CSB1 serial access, then log out
-   and back in before testing the device:
+6. Add the `mtos` service account to `dialout` for EX-CSB1 serial access:
 
    ```bash
-   sudo usermod -aG dialout "$USER"
+   sudo usermod -aG dialout mtos
    ```
 
-7. MTOS does not require root execution or passwordless sudo. Installations should
+7. MTOS and its service account do not require root execution or passwordless
+   sudo. Installations should
    follow their normal host-security policy and grant only the administrative
    privileges appropriate to their environment.
 
@@ -89,14 +91,16 @@ the EX-CSB1, MQTT, ESP32 nodes or the five-service stack have been commissioned.
 The owner-specific legacy background and evidence checklist are preserved in
 [the Cubietruck installation context](../operations/cubietruck-installation-context.md).
 
-When flashing another image, use the decompressor that matches its actual suffix.
-For an `.img.xz` file, the relevant pipeline is `xz -dc`, not `gzip -dc`; verify
-the target disk and image checksum before writing because `dd` is destructive.
+The completed macOS imaging command used `gzip -dc` successfully for the
+`.img.xz` stream and wrote `/dev/rdisk5` with `bs=1m`; the reproducible command
+and its destructive-device safeguards are recorded in the SBC provisioning
+guide. Always re-identify the target disk and verify the image checksum.
 
 ## Consequences
 
 - The board receives current security and Python support with low idle overhead.
-- Runtime packages live in the non-root user's Python site rather than `.venv`.
+- Runtime packages live in the unprivileged `mtos` account's Python site rather
+  than `.venv`.
 - In this installation, routine remote administration does not pause for a sudo
   password, while root SSH login remains disabled and sudo activity remains
   attributable to the named account in system logs.

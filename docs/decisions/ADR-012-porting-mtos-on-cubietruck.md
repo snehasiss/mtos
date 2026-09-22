@@ -21,25 +21,24 @@ statements do not match the code and must not be used for deployment.
 
 | Service | Bind address | Port | Responsibility |
 |---|---:|---:|---|
+| `mtos_admin` | `0.0.0.0` | 5300 | Authenticated host and stack administration |
 | `mtos_asset` | `0.0.0.0` | 5301 | Asset master data and media |
 | `mtos_hmi` | `0.0.0.0` | 5302 | Trusted-LAN browser interface |
 | `mtos_core` | `127.0.0.1` | 5303 | Canonical operational workflows |
 | `mtos_dcc` | `127.0.0.1` | 5304 | Exclusive EX-CSB1 serial adapter |
 | `mtos_mc` | `127.0.0.1` | 5305 | MQTT/ESP32 hardware adapter |
 
-Only Asset and HMI are reachable from the LAN. This version has no account
-authentication and must not be exposed to the Internet or an untrusted network.
+Admin, Asset and HMI are reachable from the trusted LAN. Admin is authenticated;
+Asset and HMI do not have user-account authentication and must not be exposed to
+the Internet or an untrusted network.
 
 ### Canonical lifecycle command
 
 Use the checked-in coordinator, not invented Python module entry points:
 
-```bash
-cd ~/project/mtos
-tools/mtos_services start
-tools/mtos_services status
-tools/mtos_services stop
-```
+The deployed `mtos_admin` process invokes `tools/mtos_services` as the dedicated
+`mtos` service account. For supervised diagnostics, `snehasis` may invoke the
+same coordinator with `sudo -u mtos -H` from `/home/mtos/project/mtos`.
 
 The implemented startup sequence is:
 
@@ -74,18 +73,20 @@ existing coordinator and are started explicitly from the Admin interface. They
 do not receive independent systemd units that could contradict the coordinator's
 dependency order.
 
-Therefore initial Cubietruck testing uses `tools/mtos_services` interactively.
-Systemd units will be added only with repository-owned tests for startup order,
-environment propagation, restart behavior, logging and clean shutdown. Enabling
-user linger is deferred until those units exist.
+The system unit runs as the non-login `mtos` identity. That account owns the
+checkout, operational data and Python user site and belongs to `dialout`; it has
+no sudo privilege. `snehasis` remains the human SSH/sudo administrator. User
+linger and five independent application units are neither required nor used.
 
 ## Commissioning sequence
 
 1. Run the automated test suite without hardware:
 
    ```bash
-   python3 -m pip install --user -e '.[dev]'
-   python3 -m pytest -q
+   sudo -u mtos -H python3 -m pip install --user \
+     -e '/home/mtos/project/mtos[dev]'
+   sudo -u mtos -H python3 -m pytest -q \
+     /home/mtos/project/mtos/tests
    ```
 
 2. Start the stack and confirm all five health/status results.
@@ -103,7 +104,7 @@ user linger is deferred until those units exist.
 - Deployment follows the same startup, fencing and safety path exercised by the
   integration tests.
 - A service cannot accidentally expose Core, DCC or MC to the LAN.
-- Automatic boot startup is postponed rather than documented with incorrect
-  units that could hide failures or violate dependency order.
+- Only authenticated Admin starts automatically at boot; the application stack
+  starts on explicit operator request in the implemented dependency order.
 - The Cubietruck remains a valid non-AI control host, subject to measured latency,
   memory, microSD reliability and hardware commissioning.

@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=MTOS_USER
-Group=MTOS_USER
+User=mtos
+Group=mtos
+SupplementaryGroups=dialout
 WorkingDirectory=MTOS_PROJECT_ROOT
 EnvironmentFile=/etc/mtos/admin.env
 ExecStart=/usr/bin/python3 MTOS_PROJECT_ROOT/tools/serve.py --service mtos_admin --host 0.0.0.0 --port 5300

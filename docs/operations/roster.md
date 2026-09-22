@@ -25,16 +25,14 @@ queue to prevent several decoded images exhausting a small host.
 Treat bulk directory import as a maintenance task; do not run it during live
 railroad operation. ADR-008 defines this constrained-host requirement.
 
-Cubietruck3 A20 deployment uses system Python, without a virtual environment.
-Install dependencies on the SBC itself; do not copy iMac compiled packages.
-Check that the SBC's OS provides Python 3.11+ with working sqlite3 support. Pillow may need
-native build dependencies if a compatible ARM wheel is unavailable, as noted
-above. Exact OS packages must be checked against the installed SBC distribution.
-If pip reports an externally managed Python environment or a permission error,
-stop and select the installation method appropriate to that OS; the commands
-above are not instructions to override OS package protections. The SBC OS/version
-has not yet been confirmed. A virtual environment remains optional for development.
-Service launchers use system python3 when no project .venv exists.
+Cubietruck A20 deployment uses Debian 13 system Python without a virtual
+environment. The dedicated non-login `mtos` account owns the checkout, data and
+Python user site; `snehasis` remains the human administrator. Install dependencies
+on the SBC itself and never copy iMac-compiled packages. Pillow may need native
+build dependencies when an ARMv7 wheel is unavailable. Follow the
+[SBC provisioning guide](sbc-provisioning.md) rather than applying these generic
+development commands as root. Service launchers use system Python when no
+project `.venv` exists.
 After installation, verify:
 
 ```bash

@@ -33,6 +33,9 @@ push without an explicit request. Do not launch delegated agents unless asked.
 - Python 3.11+, Flask, Waitress for ordinary HTTP services, Flask-SocketIO/
   simple-websocket for HMI, standard-library SQLite, JSON, Pillow, PySerial and
   Paho MQTT. An iPhone-first browser UI also serves tablet/desktop users.
+- On the Cubietruck, `snehasis` is the human SSH/sudo administrator. The
+  dedicated non-login `mtos` account owns the deployed checkout, `data/`, Python
+  user site and serial access, and runs Admin plus all application services.
 - SQLite is authoritative, not a collection of independently edited JSON files.
   JSON remains the API and migration representation; variable attributes use JSON
   columns. No external database server is required.

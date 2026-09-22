@@ -15,6 +15,9 @@ tools/mtos_services stop
 
 The five application services are not individually enabled at boot. See the
 [Admin installation and operation guide](admin.md).
+Admin and every process it launches run as the non-login `mtos` account. That
+account owns the checkout and data and belongs to `dialout`; it does not have
+sudo. `snehasis` is reserved for human SSH and host administration.
 
 The coordinator uses `.venv/bin/python3` when that optional development runtime
 exists; otherwise it uses the invoking system Python. Deployment does not

@@ -12,14 +12,14 @@
   </defs>
 
   <rect class="bg" width="1200" height="820"/>
-  <text class="label" x="40" y="38">MTOS asset_control — physical and logical connections</text>
+  <text class="label" x="40" y="38">MTOS — physical device and power connections</text>
   <text class="small" x="40" y="62">Component overview — not a pin-level wiring schematic; shared SQLite configuration; local node grounding</text>
 
   <rect class="group" x="30" y="85" width="1140" height="190" rx="12"/>
   <text class="label" x="50" y="115">Rolling-stock DCC control — synchronous and immediate</text>
   <rect class="core" x="65" y="145" width="205" height="82" rx="8"/>
   <text class="label" x="85" y="178">Cubietruck A20</text>
-  <text class="small" x="85" y="202">asset_control :5302</text>
+  <text class="small" x="85" y="202">mtos_core + mtos_dcc</text>
   <rect class="power" x="65" y="238" width="205" height="25" rx="5"/>
   <text class="tiny" x="101" y="255">Dedicated 5 V / 2 A</text>
   <rect class="device" x="390" y="145" width="205" height="82" rx="8"/>
@@ -32,7 +32,7 @@
   <text class="small" x="746" y="202">current test track</text>
   <rect class="load" x="960" y="145" width="175" height="82" rx="8"/>
   <text class="label" x="1008" y="178">PROG</text>
-  <text class="small" x="978" y="202">parked / not wired</text>
+  <text class="small" x="978" y="202">isolated programming track</text>
   <path class="wire" d="M270 182 H390"/>
   <text class="tiny" x="298" y="171">USB serial</text>
   <path class="powerwire" d="M595 183 H725"/>
@@ -44,7 +44,7 @@
   <text class="label" x="50" y="327">Stationary-asset control — asynchronous, queued, sequenced</text>
   <rect class="core" x="65" y="360" width="205" height="92" rx="8"/>
   <text class="label" x="85" y="392">Cubietruck A20</text>
-  <text class="small" x="85" y="416">scheduler + Mosquitto</text>
+  <text class="small" x="85" y="416">mtos_mc + Mosquitto</text>
   <text class="tiny" x="85" y="437">SQLite command state</text>
   <rect class="device" x="390" y="350" width="220" height="112" rx="8"/>
   <text class="label" x="442" y="382">ESP32 N001</text>

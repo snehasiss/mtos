@@ -30,6 +30,7 @@ from proposals still under discussion.
 - [Run, migrate and back up the roster](operations/roster.md)
 - [Integrated service startup and shutdown](operations/service-startup.md)
 - [Cubietruck installation context and commissioning evidence](operations/cubietruck-installation-context.md)
+- [Provision a fresh SBC for MTOS](operations/sbc-provisioning.md)
 - [Admin service, remote backup and deployment](operations/admin.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)

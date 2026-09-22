@@ -19,7 +19,10 @@ same computer does not protect against storage or host failure.
 ## Decision
 
 `mtos_admin` is a separate Flask service on LAN port 5300. It is the only MTOS
-service enabled at operating-system startup and is managed by systemd. The
+service enabled at operating-system startup and is managed by systemd. It and
+the application services run as the dedicated non-login `mtos` account, which
+owns the checkout, data and serial-device access. The human `snehasis` account
+retains SSH and sudo responsibility but does not own application processes. The
 operator explicitly starts and stops the application stack from its mobile-first
 web interface. The stack remains the existing five services:
 
@@ -67,4 +70,3 @@ data or checkout mutations cannot overlap.
   confirmation and the previous local tree is preserved.
 - The admin token and Flask session secret are installation configuration and
   must never be committed to Git.
-

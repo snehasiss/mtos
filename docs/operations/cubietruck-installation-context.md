@@ -51,11 +51,18 @@ name.
 
 ## Installation-specific security boundary
 
-The owner connects from the development iMac using SSH public-key authentication.
-Direct root login is disabled. The sole administrative account has the
+The owner connects as `snehasis` from the development iMac using SSH public-key
+authentication. Direct root login is disabled. The sole human administrative
+account has the
 installation-specific passwordless-sudo configuration recorded in ADR-011. This
 is not general MTOS setup guidance and depends on the private-network and key
 protection assumptions stated there.
+
+The deployed application uses a separate non-login `mtos` system account. That
+account owns the checkout, data and Python user site, belongs to `dialout`, and
+runs `mtos_admin` plus every child application service. It has neither sudo nor
+an inbound SSH password. This separates routine application ownership from the
+human account's unrestricted host-administration authority.
 
 ## Commissioning evidence still required
 
@@ -71,4 +78,3 @@ Record the following before treating the Cubietruck as the operational host:
 
 Do not put passwords, private keys, Wi-Fi credentials or the internal MTOS token
 in this document or in Git.
-
