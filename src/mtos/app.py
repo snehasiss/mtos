@@ -206,6 +206,29 @@ def create_app(config=None):
                           "address": address})
         return jsonify(items=items)
 
+    @app.get("/internal/programming-assets")
+    def programming_assets():
+        supplied = request.headers.get("X-MTOS-Internal-Token", "")
+        if not hmac.compare_digest(supplied, app.config["INTERNAL_TOKEN"]):
+            abort(403)
+        items = []
+        for family in ("loco", "mow"):
+            for asset in roster.search(family=family, status="maintenance", limit=100)["items"]:
+                life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+                if (life.get("possession") != "received" or life.get("location") != "test_prog_1"):
+                    continue
+                if control.get("dcc") is not True:
+                    continue
+                proto = asset.get("prototype") or {}
+                items.append({
+                    "id": asset["id"], "revision": asset["revision"],
+                    "reporting_mark": proto.get("reporting_mark"),
+                    "road_number": proto.get("road_number"),
+                    "prototype": proto.get("model"), "address": control.get("address"),
+                    "status": life.get("status"), "location": life.get("location"),
+                })
+        return jsonify(items=items)
+
     @app.get("/internal/operating-stationary-assets")
     def operating_stationary_assets():
         supplied = request.headers.get("X-MTOS-Internal-Token", "")

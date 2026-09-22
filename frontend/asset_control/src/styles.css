@@ -68,6 +68,24 @@ details p { margin: 5px 0 0; color: #aab5b1; font-size: 11px; }
 .roster-panel { padding-top: 6px; padding-bottom: 6px; }
 .roster-panel > small { display: block; margin-top: 4px; color: #aab5b1; font-size: 12px; }
 .notice { margin: 5px 0; padding: 5px 8px; border-left: 3px solid #e5b74c; color: #ffcf61; font-size: 12px; }
+.programming-layout { display: grid; gap: 0; }
+.track-grid, .address-grid, .cv-fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 7px; }
+.track { display: grid; gap: 2px; padding: 7px; border: 1px solid #465650; border-radius: 7px; background: #101817; }
+.track strong { font-size: 12px; }
+.track span, .asset-meta, .reading span, .cv-fields span { color: #aab5b1; font-size: 11px; }
+.asset-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; }
+.confirm { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; color: #dce2df; font-size: 11px; }
+.confirm input { width: 20px; height: 20px; margin: 0; accent-color: #e5b74c; }
+.status-line { min-height: 30px; margin: 7px 0 0; padding: 6px 8px; border-left: 3px solid #71817b; background: #101817; color: #dce2df; font-size: 11px; }
+.status-line.ready { border-color: #56c78b; color: #72e3a8; }
+.status-line.warn { border-color: #e5b74c; color: #ffcf61; }
+.address-grid { grid-template-columns: repeat(3, 1fr); }
+.reading { display: grid; gap: 3px; min-width: 0; }
+.reading strong { font-size: 22px; font-weight: 400; }
+.reading input, .cv-fields input { width: 100%; min-width: 0; min-height: 44px; padding: 6px 8px; border: 2px solid #71817b; border-radius: 8px; background: #101817; color: #f7f4eb; }
+.address-actions, .cv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.cv-fields label { display: grid; gap: 3px; }
+.test-panel button { width: 100%; margin-top: 7px; }
 
 .speed-row { margin-top: 4px; }
 .speed-row > label { color: #aab5b1; font-size: 12px; }
@@ -80,17 +98,18 @@ details p { margin: 5px 0 0; color: #aab5b1; font-size: 11px; }
 .bank-nav { display: flex; align-items: center; gap: 5px; }
 .bank-nav button { width: 44px; padding: 0; }
 .bank-nav span { min-width: 55px; text-align: center; font-size: 11px; }
-.function-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 5px; }
-.function-grid button { min-width: 0; min-height: 0; aspect-ratio: 1; padding: 9px 4px; border: 1px solid #42514c; border-radius: 10px; background: #1c2926; color: #dce2df; }
+.function-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px; }
+.function-grid button { min-width: 0; min-height: 0; aspect-ratio: 1; padding: 10px 5px; border: 2px solid #71817b; border-radius: 10px; background: #24322f; color: #f3f4ef; box-shadow: inset 0 1px 0 #ffffff16, 0 2px 0 #0a100f; }
 .function-grid button.active { border-color: #e5b74c; background: #5a491f; color: #ffda78; }
 .function-grid button.pending { opacity: 1; filter: brightness(1.15); }
 .function-grid span, .function-grid small { display: block; }
-.function-grid span { font-weight: 850; }
-.function-grid small { margin-top: 3px; color: inherit; opacity: .75; font-size: 11px; }
+.function-grid span { font-size: 17px; font-weight: 850; }
+.function-grid small { margin-top: 4px; color: inherit; opacity: .75; font-size: 9px; }
 
 @media (min-width: 760px) {
   .shell { max-width: 940px; padding: 14px; }
   h1 { font-size: 22px; }
   h2 { font-size: 18px; }
   .panel { padding: 11px; margin: 9px 0; border-radius: 14px; }
+  .programming-layout { grid-template-columns: 1fr 1fr; gap: 10px; }
 }

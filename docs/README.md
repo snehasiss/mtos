@@ -17,17 +17,20 @@ from proposals still under discussion.
 - [ADR-010: Asset lifecycle and decoder-address ownership](decisions/ADR-010-asset-lifecycle-and-decoder-address-ownership.md)
 - [ADR-011: Cubietruck operating-system and Python environment](decisions/ADR-011-cubietruck-setup.md)
 - [ADR-012: Deploying MTOS on Cubietruck A20](decisions/ADR-012-porting-mtos-on-cubietruck.md)
+- [ADR-013: Dedicated administration service and remote data continuity](decisions/ADR-013-administration-service.md)
 
 ## Current architecture and operations
 
 - [Real-time control-service architecture](architecture/control-service-architecture.md)
 - [mtos_dcc module checkpoint](architecture/mtos-dcc-module.md)
+- [CV programming design and implementation plan](architecture/cv-programming-plan.md)
 - [mtos_core module checkpoint](architecture/mtos-core-module.md)
 - [mtos_hmi module checkpoint](architecture/mtos-hmi-module.md)
 - [mtos_mc scope and low-level design](architecture/mtos-mc-module.md)
 - [Run, migrate and back up the roster](operations/roster.md)
 - [Integrated service startup and shutdown](operations/service-startup.md)
 - [Cubietruck installation context and commissioning evidence](operations/cubietruck-installation-context.md)
+- [Admin service, remote backup and deployment](operations/admin.md)
 - [System context and bounded contexts](architecture/system-context.md)
 - [Layout automation architecture](architecture/layout-automation.md)
 - [Domain vocabulary](domain/vocabulary.md)

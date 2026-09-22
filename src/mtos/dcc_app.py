@@ -127,6 +127,34 @@ def create_dcc_app(config=None):
             lambda: service.station.program_address(old_address, new_address),
         ))
 
+    @app.post("/v1/programming/address/read")
+    def read_address():
+        value = body()
+        return jsonify(service.execute(
+            value, "read_address", service.station.read_address,
+            asset_required=False,
+        ))
+
+    @app.post("/v1/programming/cv/read")
+    def read_cv():
+        value = body()
+        cv = value.get("cv")
+        return jsonify(service.execute(
+            value, "read_cv",
+            lambda: {
+                "outcome": "confirmed", "operation": "read_cv",
+                "reported": {"cv": cv, "value": service.station.read_cv(cv)},
+            },
+        ))
+
+    @app.post("/v1/programming/cv/write")
+    def write_cv():
+        value = body()
+        return jsonify(service.execute(
+            value, "program_cv",
+            lambda: service.station.program_cv(value.get("cv"), value.get("value")),
+        ))
+
     @app.post("/v1/emergency-stop")
     def emergency():
         return jsonify(service.emergency_stop())

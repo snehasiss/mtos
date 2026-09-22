@@ -118,36 +118,17 @@ preserves subsequent edits and fresh migration applies the confirmed corrections
 process. HMI opens no serial hardware and uses Socket.IO to submit typed intent to
 Core. Stop the complete MTOS service stack before restore or upgrade operations.
 
-## Manual backups and restoration
+## Backup and restoration
 
-Activate the environment, mount the destination, and invoke:
+The deployed Cubietruck uses `mtos_admin` to synchronize the complete `data/`
+tree—not only the Asset database and photographs—to a separate host with rsync
+over SSH-key login. Backup and restore require all application services stopped.
+Restore is staged, validates every SQLite database, preserves the current local
+tree, and then swaps the verified tree into place. See the
+[administration guide](admin.md) for prerequisites and operation.
 
-```bash
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --backup
-```
-
-The directory must already exist. `--remote` is a mounted filesystem path, not an
-SSH/cloud API. Each invocation creates a new timestamped snapshot; no prior backup
-is overwritten or deleted. The tool holds the shared application write lock while
-using SQLite online backup and copying media, then verifies checksums and database
-integrity before publishing the snapshot. Images and DB metadata are consistent
-for all MTOS writes; external direct filesystem/database edits bypass that lock.
-
-```bash
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --verify
-tools/mtos_asset stop
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --restore
-tools/mtos_asset start
-```
-
-Restore chooses the newest completed snapshot from the supplied directory (or an
-explicit snapshot directory). It fails if verification fails; it does not silently
-fall back to an older snapshot. Stop services first. Current data is preserved in
-a dated sibling directory before verified replacement. To rehearse without replacing
-current data, add `--restore-to ~/mtos-restored-data`, which must not exist.
-Session secrets regenerate after restore;
-logs and PID files are not backed up. No backup job is scheduled. Cron may invoke
-the command later when desired; a missing destination makes it exit nonzero.
+`tools/mtos_backup` remains a legacy local snapshot utility and is exercised by
+its compatibility tests, but it is not the deployed network-continuity path.
 
 ## JSON API
 
@@ -190,6 +171,18 @@ green touch targets for iPhone use. Asset photos use a single-column 16:9 galler
 The mobile form deliberately omits raw component, relation, and attribute JSON;
 those records remain preserved during normal edits and can receive a separate
 technical interface later.
+
+Existing asset details open in protected **View mode**. Inputs, checkboxes and
+pickers cannot change until the operator presses **Edit Asset**. In edit mode the
+control becomes **Cancel**, which reloads the persisted Asset rather than keeping
+unsaved field values; a successful save also returns to View mode. Add Asset
+opens directly in edit mode. A persistent captionless message line reports View,
+Edit and Saved state. Photo upload is available only while editing.
+
+Asset retains its light cream/caramel/green palette, but panels, 44 px controls,
+2 px borders, 10–12 px bevels and custom dropdowns use the same component language
+as HMI. Native selects remain the submitted form controls while the visible picker
+prevents platform-specific iOS menu styling from defining the application UI.
 
 ## Verification
 

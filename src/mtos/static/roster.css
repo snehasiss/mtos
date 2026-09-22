@@ -12,13 +12,13 @@ h1{font-size:27px;line-height:1.1;margin:3px 0 15px}
 h2{font-size:20px;margin:14px 0 8px}
 .eyebrow{font-size:10px;letter-spacing:.12em;color:var(--accent);margin:3px 0}
 .title{display:flex;justify-content:space-between;align-items:center;gap:10px}
-button{background:var(--accent);color:white;border:0;border-radius:8px;padding:9px 13px;min-height:44px;font:inherit;cursor:pointer}
+button{background:var(--accent);color:white;border:2px solid var(--accent);border-radius:10px;padding:7px 11px;min-height:44px;font:inherit;cursor:pointer;touch-action:manipulation}
 button:disabled{opacity:.5;cursor:default}
 .secondary{background:#e2e8e2;color:#173a38;border:2px solid #596f6b}
 .filters,.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
 .filters label:first-child{grid-column:1/-1}
 label{display:block;min-width:0;font-size:13px}
-input,select,textarea{display:block;width:100%;min-width:0;font:inherit;font-size:16px;border:1px solid #bac5c1;border-radius:6px;padding:8px;background:white;color:inherit;margin:3px 0 5px}
+input,select,textarea{display:block;width:100%;min-width:0;min-height:44px;font:inherit;font-size:16px;border:2px solid #596f6b;border-radius:10px;padding:7px 11px;background:white;color:inherit;margin:3px 0 5px}
 input[readonly]{background:#eee;color:#52615d}
 input[type=date]{inline-size:100%;max-inline-size:100%;min-inline-size:0;-webkit-appearance:none}
 textarea{resize:vertical}
@@ -36,7 +36,7 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid #
 .badge{display:inline-block;flex:0 0 auto;color:#315442;background:#dcefdc;border-radius:4px;padding:3px 8px;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .pages{display:flex;justify-content:space-between;margin:16px 0}
 .pages button{width:44px;height:44px;padding:0;display:grid;place-items:center;font:bold 24px/1 ui-sans-serif,system-ui,sans-serif}
-fieldset{border:1px solid #ddcfbc;border-radius:8px;padding:11px;margin:12px 0;background:var(--group)}
+fieldset{border:2px solid #ddcfbc;border-radius:12px;padding:11px;margin:12px 0;background:var(--group)}
 legend{float:left;width:100%;margin:0 0 9px;padding:0 0 6px;border-bottom:1px solid #ddcfbc;color:#654b38;font-size:13px;font-weight:650}
 fieldset .fields{clear:both}
 .check{display:flex;align-items:center;gap:7px}
@@ -44,6 +44,9 @@ fieldset .fields{clear:both}
 details{border-top:1px solid #ccd6cc;margin:16px 0;padding-top:10px}
 summary{cursor:pointer;font-weight:600;padding:7px 0}
 .save{position:sticky;bottom:0;background:#f4f3ee;padding:9px 0;display:flex;gap:12px;align-items:center}
+.editor-heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}.editor-heading h1{margin:0}.status-line{min-height:30px;margin:8px 0;padding:7px 9px;border-left:3px solid var(--accent);background:#e7eeea;color:#31544d;font-size:11px}.status-line.editing{border-color:#d1ad51;background:#f5eadb;color:#654b38}
+.custom-select{position:relative;margin:3px 0 5px}.custom-select select{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.custom-select-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;border:2px solid #596f6b;border-radius:10px;background:#fff;color:#223238;padding:7px 11px;text-align:left}.custom-select-options{display:none;position:absolute;z-index:40;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow-y:auto;padding:5px;border:2px solid #596f6b;border-radius:10px;background:#fff;box-shadow:0 8px 20px #31403b26}.custom-select.open .custom-select-options{display:grid;gap:3px}.custom-select-options button{min-height:42px;border:0;border-radius:7px;background:transparent;color:#223238;padding:7px 9px;text-align:left;font-size:13px;line-height:1.25}.custom-select-options button[aria-selected=true]{background:#e2eee9;color:#0e5d54}.custom-select.disabled .custom-select-trigger{pointer-events:none;border-color:#d3dbd7;background:#f8f8f4;color:#394945}.custom-select.disabled .custom-select-trigger span:last-child{visibility:hidden}
+#asset-form.view-mode input,#asset-form.view-mode textarea{pointer-events:none;border-color:#d3dbd7;background:#f8f8f4;color:#394945}#asset-form.view-mode .check{pointer-events:none}.view-mode .save,#editor.view-mode #image-form{display:none}
 .gallery{display:grid;grid-template-columns:1fr;gap:8px}
 .gallery a{display:block;width:100%}
 .gallery img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:white;border-radius:6px}

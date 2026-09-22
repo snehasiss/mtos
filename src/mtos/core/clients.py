@@ -59,6 +59,15 @@ class DccClient(JsonClient):
     def program_address(self, envelope):
         return self.request("POST", "/v1/programming/address", envelope, timeout=100)
 
+    def read_address(self, envelope):
+        return self.request("POST", "/v1/programming/address/read", envelope, timeout=100)
+
+    def read_cv(self, envelope):
+        return self.request("POST", "/v1/programming/cv/read", envelope, timeout=100)
+
+    def program_cv(self, envelope):
+        return self.request("POST", "/v1/programming/cv/write", envelope, timeout=100)
+
 
 class McClient(JsonClient):
     def session(self, session_id, epoch):
@@ -97,6 +106,9 @@ class AssetClient(JsonClient):
 
     def stationary(self):
         return self.request("GET", "/internal/operating-stationary-assets")["items"]
+
+    def programming_assets(self):
+        return self.request("GET", "/internal/programming-assets")["items"]
 
     def update_programmed_address(self, asset_id, revision, address):
         return self.request(

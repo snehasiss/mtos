@@ -140,9 +140,13 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     assert b'name="relations"' not in page.data
     assert b'name="attributes"' not in page.data
     assert b'name="purchased_on"' in page.data and b'name="retired_on"' not in page.data
+    assert b'id="edit-toggle"' in page.data and b'id="detail-status"' in page.data
     script = client.get("/static/roster.js").data
     assert b"card-top" in script
     assert b"builder-model" in script
+    assert b"setEditMode" in script and b"custom-select-trigger" in script
+    style = client.get("/static/roster.css").data
+    assert b"view-mode" in style and b"custom-select-options" in style
     assert b"asset-id" in script
     assert b"asset.prototype?.maker,asset.prototype?.model" in script
     assert client.post("/api/assets", json=loco()).status_code == 403
@@ -247,9 +251,15 @@ def test_internal_programmed_address_update_is_authenticated_and_revision_checke
     roster = app.extensions["roster"]
     roster.save(loco(
         control={"dcc": True, "address": 3},
-        lifecycle={"possession": "received", "status": "maintenance"},
+        lifecycle={"possession": "received", "status": "maintenance", "location": "test_prog_1"},
     ))
     client = app.test_client()
+    programmable = client.get(
+        "/internal/programming-assets",
+        headers={"X-MTOS-Internal-Token": "secret"},
+    )
+    assert programmable.status_code == 200
+    assert programmable.json["items"][0]["id"] == "L001"
     path = "/internal/assets/L001/programmed-address"
     assert client.patch(path, json={"revision": 1, "address": 28}).status_code == 403
     updated = client.patch(

@@ -48,6 +48,9 @@ class HmiService:
     def stationary(self):
         return self.gateway.stationary()
 
+    def programming_assets(self):
+        return self.gateway.programming_assets()
+
     def accept(self, socket_id, command):
         encoded = json.dumps(command, separators=(",", ":")).encode()
         if len(encoded) > 16 * 1024:

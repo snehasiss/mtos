@@ -1,4 +1,28 @@
-# Historical MAIN control UI proposal
+# MTOS control UI mockups
+
+## Shared HMI and Asset visual language proposal
+
+Open [ui-theme-unification.html](ui-theme-unification.html) for the side-by-side
+mobile mock. The HMI half gives function keys the same proportional border,
+bevel and raised-button treatment as the throttle −/+ controls. The Asset half
+retains its existing light colours while adopting the HMI component geometry,
+labels, panel borders and custom picker behavior. This is a standalone preview;
+it changes no production UI and calls no service. Asset detail opens in protected
+View mode; **Edit Asset** explicitly unlocks the form, and **Cancel** returns it
+to read-only presentation. This reviewed visual language is now reflected in the
+production Asset and HMI source; the file remains the compact comparison record.
+
+## CV programming proposal
+
+Open [cv-programming.html](cv-programming.html) for the current handset-style
+Programming mock. It includes explicit Read Address and Write Address actions,
+recorded/decoder/new address separation, CV read/write, readiness and mismatch
+states, and a deliberately disabled future PROG-track test mode. Every operational
+section retains a message area so progress and the last result remain visible,
+without a redundant “STATUS” caption. The mock makes no API request and sends no
+hardware command.
+
+## Historical MAIN control proposal
 
 This mockup predates the React `mtos_hmi` implementation. It remains a visual
 design record, not the current operator interface or an executable specification.

@@ -22,7 +22,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--service",
-        choices=["mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core", "mtos_mc"],
+        choices=["mtos_admin", "mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core", "mtos_mc"],
         default="mtos_asset",
     )
     parser.add_argument("action", choices=["start", "stop", "restart", "status"])
@@ -32,9 +32,9 @@ def main():
     # launchers share one lock, pidfile and process and cannot bind port 5301 twice.
     aliases = {"asset_manager": "mtos_asset", "asset_control": "mtos_hmi"}
     args.service = aliases.get(args.service, args.service)
-    args.port = {"mtos_asset": 5301, "mtos_hmi": 5302, "mtos_core": 5303, "mtos_dcc": 5304, "mtos_mc": 5305}[args.service]
+    args.port = {"mtos_admin": 5300, "mtos_asset": 5301, "mtos_hmi": 5302, "mtos_core": 5303, "mtos_dcc": 5304, "mtos_mc": 5305}[args.service]
     if args.host is None:
-        args.host = "0.0.0.0" if args.service in ("mtos_asset", "mtos_hmi") else "127.0.0.1"
+        args.host = "0.0.0.0" if args.service in ("mtos_admin", "mtos_asset", "mtos_hmi") else "127.0.0.1"
     run = data_root() / "run"
     run.mkdir(parents=True, exist_ok=True)
     pidfile = run / f"{args.service}.json"

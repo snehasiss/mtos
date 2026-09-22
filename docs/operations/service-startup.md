@@ -2,7 +2,9 @@
 
 Date: 2026-09-18. Scope: DCC MAIN plus the hardware-free accessory-control path.
 
-Use the stack coordinator for normal operation:
+On the deployed Cubietruck, the system-managed `mtos_admin` service is available
+on port 5300 after boot. Normal operator startup and shutdown use its web
+interface. It invokes this same stack coordinator:
 
 ```bash
 tools/mtos_services start
@@ -10,6 +12,9 @@ tools/mtos_services status
 tools/mtos_services restart
 tools/mtos_services stop
 ```
+
+The five application services are not individually enabled at boot. See the
+[Admin installation and operation guide](admin.md).
 
 The coordinator uses `.venv/bin/python3` when that optional development runtime
 exists; otherwise it uses the invoking system Python. Deployment does not

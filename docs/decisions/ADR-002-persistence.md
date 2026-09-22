@@ -20,8 +20,9 @@ Asset owns `data/db/asset.sqlite3`, Core owns `data/db/core.sqlite3`, and MC own
 bounded adapter evidence in `data/db/mc.sqlite3`. DCC and HMI have no Version 1
 database. Photos are in `data/media`.
 Both are excluded from Git. `MTOS_DATA_DIR` configures another live data root.
-Manual `tools/mtos_backup --remote PATH --backup` snapshots the database and media together;
-there is no installed backup schedule. See `docs/operations/roster.md`.
+ADR-013 makes the complete `data/` tree one continuity unit and mirrors it to a
+remote host with rsync over key-authenticated SSH; there is no installed backup
+schedule. See `docs/operations/admin.md`.
 
 - Important identities, relationships, states, and query fields use relational
   columns with database constraints.

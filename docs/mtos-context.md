@@ -1,8 +1,10 @@
 # MTOS project context
 
-Last updated: 2026-09-18. Checkpoint: Asset, DCC MAIN, Core, HMI and the
-hardware-free MC path are implemented locally. EX-CSB1 and accessory electronics
-commissioning remain pending. The owner handles commits and pushes.
+Last updated: 2026-09-22. Checkpoint: Asset, DCC MAIN, Core, HMI and the
+hardware-free MC path are implemented locally. A dedicated authenticated Admin
+service and remote SSH/rsync continuity path have also been implemented locally.
+EX-CSB1 and accessory electronics commissioning remain pending. The owner
+handles commits and pushes.
 
 ## How to use and maintain this file
 
@@ -44,11 +46,23 @@ push without an explicit request. Do not launch delegated agents unless asked.
 
 | Service | Port | Implementation |
 | --- | --- | --- |
+| `mtos_admin` | 5300 LAN | Boot-time administration, stack control, remote data backup/restore and Git update |
 | `mtos_asset` | 5301 LAN | Roster UI/API and asset configuration authority; `asset_manager` is an alias |
 | `mtos_hmi` | 5302 LAN | React/Socket.IO interface for DCC and stationary assets; `asset_control` is an alias |
 | `mtos_core` | 5303 loopback | Canonical operational authority and `core.sqlite3` owner |
 | `mtos_dcc` | 5304 loopback | Exclusive EX-CSB1 serial adapter |
 | `mtos_mc` | 5305 loopback | MQTT/accessory scheduler and `mc.sqlite3` owner |
+
+`mtos_admin` is the only MTOS service enabled through systemd at host boot. It
+starts, stops and restarts the other five services through the existing stack
+coordinator. Its pale-orange mobile UI uses the MTOS logo and requires an
+installation token. Backup and restore accept only
+`user@host:/absolute/path`, use non-interactive SSH-key authentication and rsync
+the complete local `data/` tree to `<remote>/data/`. These operations and Git
+update require the application stack stopped. Restore is staged, verifies all
+SQLite databases, preserves the prior local data tree, and acquires the
+exclusive service-lifetime lock before swapping. ADR-013 and
+`docs/operations/admin.md` are authoritative for setup and operation.
 
 The asset manager currently provides:
 
@@ -294,21 +308,10 @@ asset_control start/restart report unimplemented and return nonzero; stop/status
 do not launch a placeholder. No server is started as part of this context task.
 
 Database, media, session secrets and runtime files are ignored by Git. A source
-push does NOT back up the roster or photographs. Backup is explicitly manual:
-
-```bash
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --backup
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --verify
-tools/asset_manager stop
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --restore
-tools/asset_manager start
-```
-
-The remote directory must already exist and be mounted; this is a filesystem
-path, not a cloud/SSH connector. No automated job is installed because removable
-storage may not be present. The owner can later schedule the same CLI with cron.
-Each backup is a timestamped snapshot with SQLite online backup, full media copy,
-SHA-256 manifest, DB integrity/foreign-key checks and media verification. Earlier
+push does NOT back up the roster or photographs. This older checkpoint used
+`tools/mtos_backup` with a mounted directory. ADR-013 supersedes it for the
+deployed Cubietruck with complete-`data/` rsync over SSH through `mtos_admin`.
+The old utility remains only as a compatible local snapshot tool. Earlier
 snapshots are not overwritten or pruned. Application writes are coordinated
 while the snapshot is captured.
 
@@ -334,7 +337,9 @@ mtos/
 │   └── images/                      # Schematics and README artwork
 ├── frontend/asset_control/          # React/TypeScript HMI source and Vite config
 ├── firmware/esp32_node/             # PlatformIO ESP32 source/config examples
+├── deploy/systemd/mtos-admin.service # Boot-time Admin unit template
 ├── src/mtos/
+│   ├── admin_app.py / admin/         # Authenticated host administration
 │   ├── asset_app.py / app.py / roster.py / assets/
 │   ├── core_app.py / core/          # Operational authority and Core client/API
 │   ├── dcc_app.py / dcc/            # EX-CSB1 adapter
@@ -347,12 +352,13 @@ mtos/
 │   ├── templates/ / static/
 │   └── __init__.py
 ├── tools/
+│   ├── mtos_admin                    # Manual Admin launcher/diagnostics
 │   ├── mtos_asset / mtos_hmi / mtos_core / mtos_dcc / mtos_mc
 │   ├── mtos_services               # Integrated start/stop/restart/status
 │   ├── asset_manager / asset_control  # Compatibility aliases
 │   ├── service.py / serve.py / build_asset_control_ui
 │   └── import_image.py / import_legacy.py / mtos_backup
-├── tests/                           # Asset, DCC, Core, HMI, MC and integration tests
+├── tests/                           # Admin, Asset, DCC, Core, HMI, MC and integration tests
 ├── data/                           # Local operational data, not source history
 │   ├── db/                         # asset.sqlite3, core.sqlite3, mc.sqlite3
 │   ├── media/{family}/             # {asset_id}_n.jpg
@@ -1348,3 +1354,88 @@ the real EX-CSB1 or a locomotive. General CV programming remains later work.
 ADR-010 records the authoritative decision and supersedes older lease-blocking
 and wholly-deferred address-programming descriptions. No live service, database,
 serial device or locomotive was touched during this checkpoint.
+
+### 2026-09-21: CV programming design checkpoint
+
+CV programming and Cubietruck commissioning are now parallel workstreams. The
+physical target is two permanently wired, fully isolated tracks: EX-CSB1 A to
+`test_main_1` as MAIN and B to `test_prog_1` as PROG. Service-mode programming
+requires one decoder on `test_prog_1`, a received DCC `loco` or self-propelled
+`mow` asset in maintenance at that exact location, verified A/B roles and MAIN
+power confirmed off.
+
+The dedicated programming track may also support a bounded test run without
+moving the locomotive. DCC-EX JOIN/DriveAway is the preferred commissioning
+experiment because it temporarily sends the MAIN waveform to the PROG output;
+explicitly switching B between PROG and MAIN is the fallback. Initial joined
+tests require `test_main_1` clear, speed zero on entry, a low speed ceiling,
+explicit stop/power-off/UNJOIN and verified restoration to B=PROG. Neither path
+is treated as commissioned until exact EX-CSB1 feedback has been recorded.
+
+The review found that the fake-tested address backend must be corrected before
+hardware use. DCC-EX directs clients to use `<R>` for effective decoder address
+and `<W address>` for address changes so consist and all required address CVs are
+handled together. MTOS must replace its manual CV1/CV17/CV18/CV29 sequence, then
+read the address again before Core conditionally updates Asset. Generic CV reads
+and writes remain service-mode operations with write readback and no automatic
+write retry. The HMI, API increments, state machine and staged commissioning are
+specified in `docs/architecture/cv-programming-plan.md`. No hardware command was
+sent and no implementation code was changed at this checkpoint.
+
+The Programming UI must follow the familiar commercial-handset interaction with
+two explicit actions: **Read Address** and **Write Address**. Read Address works
+without a correct recorded address and does not modify Asset, supporting recovery
+of locomotives that respond to neither address 3 nor their road number. It shows
+the decoder result separately from the recorded Asset address. Write Address is
+the guarded physical-programming and conditional-Asset-update workflow; a read
+result is never silently persisted.
+
+There is no routine third Save button. Write Address includes physical write,
+decoder readback and the conditional Asset `control.address` update as one
+coordinated operation. A verified-hardware/failed-Asset outcome becomes uncertain;
+a later recovery increment must expose a contextual Reconcile action. Persistent per-section message areas
+remain visible but carry no redundant “STATUS” caption.
+
+### 2026-09-21: CV programming software checkpoint
+
+The hardware-independent CV programming path is implemented across Asset, Core,
+DCC and HMI. Asset exposes only received DCC locomotives/self-propelled MOW assets
+in maintenance at `test_prog_1`. Core enforces that eligibility for writes,
+journals each operation, and updates Asset `control.address` only after DCC
+confirms a dedicated address write and an independent address readback. Read
+Address can run without selecting an Asset so an unknown decoder can be
+identified without changing inventory.
+
+DCC now uses DCC-EX `<R>` and `<W address>` for effective decoder addressing;
+the obsolete manual CV1/CV17/CV18/CV29 sequence has been removed. Generic CV
+writes are followed by a correlated CV read and mismatch is a failure. The React
+Programming tab contains track readiness, optional programming-Asset selection,
+the one-decoder confirmation, distinct Recorded/Decoder/New address fields,
+explicit Read Address and Write Address buttons, generic CV Read/Write controls,
+and persistent per-section result areas without a redundant STATUS label. The
+PROG-track test-mode panel remains disabled pending JOIN/DriveAway commissioning.
+
+The production React bundle was rebuilt. Automated verification at this
+checkpoint is 112 tests passed with one optional browser smoke test skipped;
+TypeScript compilation and `git diff --check` pass. No serial, MQTT or other
+hardware command was sent, and no commit or push was performed.
+
+### 2026-09-21: shared UI language and protected Asset detail
+
+The approved HMI/Asset comparison mock was applied to production. HMI function
+keys now use the same proportional 2 px border, 10 px bevel, raised edge, padding
+and touch geometry as the throttle step buttons while retaining the dark palette
+and captionless persistent programming status lines.
+
+Asset retains its existing light palette but adopts the shared panel, input,
+button and picker geometry. Visible dropdowns are application-owned custom
+pickers backed by native form selects, with compact symmetric option typography.
+Existing asset details open read-only; **Edit Asset** unlocks fields and media
+upload, **Cancel** reloads persisted data, and a successful Save restores View
+mode. Add Asset remains editable. A persistent message line shows View, Edit or
+Saved state without a STATUS caption.
+
+The React production bundle was rebuilt; the Asset JavaScript passed syntax
+validation, all 112 tests passed with one optional browser smoke test skipped,
+and `git diff --check` passed. Development services remained stopped, no hardware
+command was issued, and no commit or push was performed.

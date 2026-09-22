@@ -82,6 +82,9 @@ class CoreService:
     def hmi_stationary(self):
         return self.asset.stationary()
 
+    def hmi_programming_assets(self):
+        return self.asset.programming_assets()
+
     def hmi_command(self, operation, payload, command_id):
         if operation == "device.connect":
             return self.device_connect(payload.get("selection_id"), command_id)
@@ -99,6 +102,14 @@ class CoreService:
             return self.emergency_stop(command_id)
         if operation == "resume":
             return self.resume()
+        if operation == "programming.address.read":
+            return self.read_address(payload.get("asset_id"), command_id)
+        if operation == "programming.address.write":
+            return self.program_address(payload.get("asset_id"), payload.get("new_address"), command_id)
+        if operation == "programming.cv.read":
+            return self.read_cv(payload.get("asset_id"), payload.get("cv"), command_id)
+        if operation == "programming.cv.write":
+            return self.program_cv(payload.get("asset_id"), payload.get("cv"), payload.get("value"), command_id)
         if operation in {"turnout.set", "signal.set", "machine.execute"}:
             return self.stationary(operation, payload.get("asset_id"), payload.get("value"), command_id)
         raise ValueError(f"Unsupported HMI operation: {operation}")
@@ -206,13 +217,9 @@ class CoreService:
         self._require_started()
         if type(new_address) is not int or not 1 <= new_address <= 10239:
             raise ValueError("new_address must be an integer from 1 through 10239")
-        asset = self.asset.get(asset_id)
-        life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+        asset, lease = self._programming_asset(asset_id, "program_address")
+        control = asset.get("control") or {}
         old_address = control.get("address")
-        if asset.get("family") not in {"loco", "mow"} or control.get("dcc") is not True:
-            raise CoreConflict("Address programming requires a DCC self-propelled asset")
-        if life.get("possession") != "received" or life.get("status") != "maintenance":
-            raise CoreConflict("Address programming requires a received asset in maintenance")
         if type(old_address) is not int or not 1 <= old_address <= 10239:
             raise CoreConflict("Asset requires a valid current DCC address")
         if old_address == new_address:
@@ -222,9 +229,6 @@ class CoreService:
         replay = self._existing(command_id, "program_address", asset_id, payload)
         if replay:
             return replay
-        lease = self.asset.acquire_lease(
-            asset_id, asset["revision"], self.session_id, self.epoch, "program_address"
-        )
         self.repository.reserve(asset_id, lease, asset["revision"], old_address)
         cid = command_id or str(uuid.uuid4())
         self.repository.begin(cid, "program_address", payload, asset_id)
@@ -268,6 +272,44 @@ class CoreService:
             }
             self.repository.finish(cid, "uncertain", "uncertain", evidence)
             raise
+
+    def read_address(self, asset_id=None, command_id=None):
+        """Read the effective decoder address; an Asset association is optional."""
+        self._require_started()
+        asset = lease = None
+        if asset_id:
+            asset, lease = self._programming_asset(asset_id, "read_address")
+        payload = {"asset_id": asset_id}
+        cid = command_id or str(uuid.uuid4())
+        existing = self.repository.begin(cid, "read_address", payload, asset_id)
+        if existing:
+            return {"command_id": cid, **self._stored_result(existing), "replayed": True}
+        envelope = {"command_id": cid, "core_session_id": self.session_id, "core_epoch": self.epoch}
+        if asset is not None:
+            envelope.update(asset_id=asset_id, asset_revision=asset["revision"],
+                            lease_id=lease["lease_id"], fencing_token=lease["fencing_token"])
+        try:
+            result = self.dcc.read_address(envelope)
+            self.repository.finish(cid, "completed", result.get("outcome"), result)
+            return {"command_id": cid, **result}
+        except Exception:
+            self.repository.finish(cid, "uncertain")
+            raise
+
+    def read_cv(self, asset_id, cv, command_id=None):
+        self._validate_cv(cv)
+        asset, lease = self._programming_asset(asset_id, "read_cv")
+        return self._programming_dispatch(command_id, "read_cv", asset_id,
+                                          {"cv": cv}, asset, lease, self.dcc.read_cv)
+
+    def program_cv(self, asset_id, cv, value, command_id=None):
+        self._validate_cv(cv)
+        if type(value) is not int or not 0 <= value <= 255:
+            raise ValueError("value must be an integer from 0 through 255")
+        asset, lease = self._programming_asset(asset_id, "program_cv")
+        return self._programming_dispatch(command_id, "program_cv", asset_id,
+                                          {"cv": cv, "value": value}, asset, lease,
+                                          self.dcc.program_cv)
 
     def stop(self, asset_id, command_id=None):
         self._require_started()
@@ -334,6 +376,47 @@ class CoreService:
         )
         self.repository.reserve(asset_id, lease, asset["revision"], address)
         return asset, lease, address
+
+    def _programming_asset(self, asset_id, purpose):
+        if not isinstance(asset_id, str) or not asset_id:
+            raise ValueError("asset_id required")
+        asset = self.asset.get(asset_id)
+        life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
+        if asset.get("family") not in {"loco", "mow"} or control.get("dcc") is not True:
+            raise CoreConflict("Programming requires a DCC self-propelled asset")
+        if life.get("possession") != "received" or life.get("status") != "maintenance":
+            raise CoreConflict("Programming requires a received asset in maintenance")
+        if life.get("location") != "test_prog_1":
+            raise CoreConflict("Programming requires the asset at test_prog_1")
+        lease = self.asset.acquire_lease(
+            asset_id, asset["revision"], self.session_id, self.epoch, purpose
+        )
+        return asset, lease
+
+    @staticmethod
+    def _validate_cv(cv):
+        if type(cv) is not int or not 1 <= cv <= 1024:
+            raise ValueError("cv must be an integer from 1 through 1024")
+
+    def _programming_dispatch(self, command_id, operation, asset_id, payload,
+                              asset, lease, action):
+        cid = command_id or str(uuid.uuid4())
+        existing = self.repository.begin(cid, operation, payload, asset_id)
+        if existing:
+            return {"command_id": cid, **self._stored_result(existing), "replayed": True}
+        envelope = {
+            "command_id": cid, "core_session_id": self.session_id,
+            "core_epoch": self.epoch, "asset_id": asset_id,
+            "asset_revision": asset["revision"], "lease_id": lease["lease_id"],
+            "fencing_token": lease["fencing_token"], **payload,
+        }
+        try:
+            result = action(envelope)
+            self.repository.finish(cid, "completed", result.get("outcome"), result)
+            return {"command_id": cid, **result}
+        except Exception:
+            self.repository.finish(cid, "uncertain")
+            raise
 
     def _dispatch(self, command_id, operation, asset_id, journal_payload, path,
                   device_payload, asset=None, lease=None):

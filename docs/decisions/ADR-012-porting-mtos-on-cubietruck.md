@@ -58,7 +58,8 @@ coordinator stops services already started. The detailed contract remains in
 
 - `data/db/asset.sqlite3`, `core.sqlite3` and `mc.sqlite3` are operational data.
 - `data/media/` contains asset images.
-- These paths are excluded from Git and require manual `mtos_backup` backups.
+- The complete `data/` tree is excluded from Git and is mirrored to a separate
+  host by `mtos_admin` as defined by ADR-013.
 - DCC and HMI do not receive empty databases merely for naming symmetry.
 - Use a non-default, shared `MTOS_INTERNAL_TOKEN` for all five services in a
   deployed stack.
@@ -67,12 +68,11 @@ coordinator stops services already started. The detailed contract remains in
 
 ### Supervision
 
-User-level systemd with linger is an acceptable eventual deployment mechanism,
-but it is not yet supplied or tested by this repository. Five independent units
-must not encode a dependency graph that contradicts the coordinator. The current
-launchers also daemonize child processes and maintain their own PID files, so a
-naive `Type=simple` unit around them would not provide correct process
-supervision.
+ADR-013 supplies one system-level systemd unit for `mtos_admin`; it is the only
+MTOS service enabled at boot. The five application services remain under the
+existing coordinator and are started explicitly from the Admin interface. They
+do not receive independent systemd units that could contradict the coordinator's
+dependency order.
 
 Therefore initial Cubietruck testing uses `tools/mtos_services` interactively.
 Systemd units will be added only with repository-owned tests for startup order,

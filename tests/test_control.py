@@ -9,6 +9,8 @@ from mtos.control.dcc.protocol import (
     Framer,
     encode_cv_read,
     encode_cv_write,
+    encode_address_read,
+    encode_address_write,
     encode_function,
     encode_main_power,
     encode_throttle,
@@ -26,6 +28,7 @@ class FakeSerial:
         self.writes = []
         self.is_open = False
         self.cvs = {1: 3, 17: 192, 18: 3, 29: 0}
+        self.address = 3
 
     def open(self, port, baud_rate, timeout, write_timeout):
         self.port = port
@@ -49,15 +52,22 @@ class FakeSerial:
             address, speed, forward = map(int, parts[1:])
             speed_byte = (129 + speed if speed else 128) if forward else (1 + speed if speed else 0)
             self.chunks.append(f"<l {address} 0 {speed_byte} 0>".encode())
+        elif data == b"<R>":
+            self.chunks.append(f"<r {self.address}>".encode())
         elif data.startswith(b"<R "):
             _, cv, callback, callback_sub = data.decode()[1:-1].split()
             self.chunks.append(
                 f"<r{callback}|{callback_sub}|{cv} {self.cvs.get(int(cv), -1)}>".encode()
             )
         elif data.startswith(b"<W "):
-            _, cv, value = data.decode()[1:-1].split()
-            self.cvs[int(cv)] = int(value)
-            self.chunks.append(f"<r{cv} {value}>".encode())
+            parts = data.decode()[1:-1].split()
+            if len(parts) == 2:
+                self.address = int(parts[1])
+                self.chunks.append(f"<r {self.address}>".encode())
+            else:
+                _, cv, value = parts
+                self.cvs[int(cv)] = int(value)
+                self.chunks.append(f"<r{cv} {value}>".encode())
 
     def close(self):
         self.is_open = False
@@ -87,6 +97,9 @@ def test_protocol_validation_framing_and_reports():
     assert encode_function(28, 68, True) == "<F 28 68 1>"
     assert encode_cv_read(29, 7) == "<R 29 7 0>"
     assert encode_cv_write(29, 34) == "<W 29 34>"
+    assert encode_address_read() == "<R>"
+    assert encode_address_write(4202) == "<W 4202>"
+    assert parse_frame("<r 4202>").data == {"address": 4202}
     assert parse_frame("<r7|0|29 34>").data == {
         "cv": 29, "value": 34, "callback": 7, "callback_sub": 0,
     }
@@ -122,13 +135,12 @@ def test_station_programs_and_verifies_short_and_long_addresses():
     station.set_main_power(False)
     short = station.program_address(3, 28)
     assert short.outcome == "confirmed"
-    assert short.reported == {"address": 28, "cvs": {1: 28, 29: 0}}
+    assert short.reported == {"address": 28}
     long = station.program_address(28, 4202)
     assert long.outcome == "confirmed"
-    assert long.reported == {
-        "address": 4202,
-        "cvs": {17: 208, 18: 106, 29: 32},
-    }
+    assert long.reported == {"address": 4202}
+    assert station.read_address().reported == {"address": 4202}
+    assert station.program_cv(8, 151).reported == {"cv": 8, "value": 151}
 
 
 def test_station_refuses_programming_without_verified_prog_or_with_main_power():

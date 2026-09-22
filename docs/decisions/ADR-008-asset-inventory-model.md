@@ -361,20 +361,14 @@ output contract.
 
 Media is operational user data and is excluded from the MTOS source repository.
 Git history is not a backup mechanism for changing JPEG and SQLite data. The
-SQLite database and the complete media tree form one backup unit. A consistent
-backup first uses SQLite's online backup facility, then captures that database
-copy and `data/media` in the same versioned snapshot. A plain one-way mirror is
-insufficient because deletion or corruption would immediately propagate.
+databases, media and every other file under `data/` form one continuity unit.
 
-Backups are manually invoked using `tools/mtos_backup --remote ~/gdrive/backup/mtos/data --backup`.
-The destination must already exist; removable media need not always be mounted.
-No automation is installed. The same command may later be scheduled with cron by
-the operator. SHA-256 manifests, database integrity checks and media checksums
-are verified before a snapshot is published. `--restore` selects the newest
-completed snapshot in the remote directory, verifies it, and replaces local data
-only while services are stopped. Previous local data is retained in a dated
-`data.before-restore-*` directory. `--restore-to` optionally targets a new
-directory. Keep snapshots on a separate device.
+ADR-013 supersedes the earlier removable-directory snapshot procedure for the
+deployed Cubietruck. The Admin service now synchronizes the complete stopped
+`data/` tree to a separate host using rsync over key-authenticated SSH. It stages
+and validates a restore and retains the previous local tree. The destination is
+an exact current mirror; historical snapshots, if required, are created on the
+remote host.
 
 ## Application boundary
 
@@ -394,12 +388,19 @@ with HTTP 409. The legacy_document table preserves all migration source JSON,
 including fields which have no direct equivalent. Acquisition source, price and
 legacy acquisition date are retained in lifecycle.acquisition.
 
-The UI supports add, search, edit, retirement through lifecycle status, ordered
+The UI supports add, search, protected read-only detail viewing, explicit edit,
+retirement through lifecycle status, ordered
 consist editing, photo upload and gallery display. The mobile asset form does not
 expose raw JSON for components, relations, or variable attributes; ordinary edits
 preserve those values. A future technical interface or CLI may manage them.
 Configuration editing records inventory information only; it does not program a
 decoder or actuate hardware.
+
+Existing details default to View mode to reduce accidental mobile edits. Edit is
+an explicit state; Cancel discards the browser form by reloading persisted data,
+and Save returns to View mode. Add Asset remains directly editable. The light
+Asset palette is retained while control geometry and custom picker behavior are
+shared with HMI.
 
 Asset management does not publish MQTT commands or model live railroad operation.
 ADR-009 and the MC low-level design assign those concerns to Core and MC.

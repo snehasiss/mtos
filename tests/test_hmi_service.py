@@ -35,6 +35,10 @@ class FakeGateway:
                  "label": None, "node_id": "N001", "revision": 1,
                  "configuration_revision": 1, "actions": []}]
 
+    def programming_assets(self):
+        return [{"id": "L002", "address": 3, "status": "maintenance",
+                 "location": "test_prog_1"}]
+
     def command(self, operation, payload, command_id):
         self.calls.append((operation, payload, command_id))
         return {"outcome": "confirmed", "operation": operation}
@@ -90,6 +94,7 @@ def test_hmi_http_and_request_events():
     assert browser.emit("roster.request", None, callback=True)["items"][0]["id"] == "L001"
     assert browser.emit("devices.request", None, callback=True)["items"][0]["selection_id"] == "fake"
     assert browser.emit("stationary.request", None, callback=True)["items"][0]["id"] == "T001"
+    assert browser.emit("programming.request", None, callback=True)["items"][0]["id"] == "L002"
 
 
 def test_hmi_rejects_oversized_command():

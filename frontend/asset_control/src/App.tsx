@@ -3,6 +3,7 @@ import { api } from "./api";
 import type {
   ControlSnapshot,
   Direction,
+  ProgrammingAsset,
   RosterLocomotive,
   SerialDevice,
   StationaryAsset,
@@ -20,6 +21,7 @@ const initialSnapshot: ControlSnapshot = {
     last_seen: null,
     stale: true,
     main: {letter: null, mode: null, power: "unknown"},
+    prog: {letter: null, mode: null, power: "unknown"},
     error: null,
     locomotives: {},
   },
@@ -95,7 +97,8 @@ export default function App() {
   const [roster, setRoster] = useState<RosterLocomotive[]>([]);
   const [devices, setDevices] = useState<SerialDevice[]>([]);
   const [stationary, setStationary] = useState<StationaryAsset[]>([]);
-  const [area, setArea] = useState<"operation" | "turnout" | "signal" | "machine">("operation");
+  const [programmingAssets, setProgrammingAssets] = useState<ProgrammingAsset[]>([]);
+  const [area, setArea] = useState<"operation" | "programming" | "turnout" | "signal" | "machine">("operation");
   const [selectedStationary, setSelectedStationary] = useState("");
   const [selectedAsset, setSelectedAsset] = useState("");
   const [selectedDevice, setSelectedDevice] = useState("");
@@ -107,6 +110,16 @@ export default function App() {
   const [lifecycle, setLifecycle] = useState<"device" | "power" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [programmingAsset, setProgrammingAsset] = useState("");
+  const [onlyDecoder, setOnlyDecoder] = useState(false);
+  const [decoderAddress, setDecoderAddress] = useState<number | null>(null);
+  const [newAddress, setNewAddress] = useState("");
+  const [cvNumber, setCvNumber] = useState("8");
+  const [cvValue, setCvValue] = useState("");
+  const [programmingBusy, setProgrammingBusy] = useState(false);
+  const [decoderMessage, setDecoderMessage] = useState("Select an Asset, or read an unassigned decoder address.");
+  const [addressMessage, setAddressMessage] = useState("Read does not change the decoder or Asset record.");
+  const [cvMessage, setCvMessage] = useState("Read a CV before changing it.");
   const throttleTimer = useRef<number | null>(null);
   const lifecycleRef = useRef(false);
   const pendingFunctionsRef = useRef<Set<number>>(new Set());
@@ -121,8 +134,8 @@ export default function App() {
     async function load() {
       try {
         const session = await api.session();
-        const [locomotives, serialDevices, stationaryAssets] = await Promise.allSettled([
-          api.locomotives(), api.devices(), api.stationary(),
+        const [locomotives, serialDevices, stationaryAssets, programmable] = await Promise.allSettled([
+          api.locomotives(), api.devices(), api.stationary(), api.programmingAssets(),
         ]);
         if (!active) return;
         setSnapshot(session);
@@ -135,7 +148,11 @@ export default function App() {
           if (serialDevices.value.items.length === 1) setSelectedDevice(serialDevices.value.items[0].selection_id);
         }
         if (stationaryAssets.status === "fulfilled") setStationary(stationaryAssets.value.items);
-        const failed = [locomotives, serialDevices, stationaryAssets].find(
+        if (programmable.status === "fulfilled") {
+          setProgrammingAssets(programmable.value.items);
+          if (programmable.value.items.length === 1) setProgrammingAsset(programmable.value.items[0].id);
+        }
+        const failed = [locomotives, serialDevices, stationaryAssets, programmable].find(
           (result): result is PromiseRejectedResult => result.status === "rejected",
         );
         setMessage(failed ? (failed.reason instanceof Error ? failed.reason.message : "Unable to load controls") : null);
@@ -259,12 +276,43 @@ export default function App() {
   const selectedNode = snapshot.mc.nodes.find((node) => node.node_id === selectedAccessory?.node_id);
   const accessoryReady = snapshot.mc.broker === "connected" && selectedNode?.ready === true;
   const latestAccessoryExecution = snapshot.mc.executions.find((item) => item.asset_id === selectedStationary);
+  const selectedProgrammingAsset = programmingAssets.find((item) => item.id === programmingAsset);
+  const programmingReady = ready && snapshot.device.main.power === "off" && snapshot.device.prog?.mode === "PROG";
 
   useEffect(() => {
-    if (area === "operation") return;
+    if (area === "operation" || area === "programming") return;
     const items = stationary.filter((item) => item.family === area);
     setSelectedStationary(items.length === 1 ? items[0].id : "");
   }, [area, stationary]);
+
+  async function performProgramming(section: "address" | "cv", action: () => Promise<Record<string, any>>) {
+    if (programmingBusy) return;
+    setProgrammingBusy(true);
+    try {
+      const result = await action();
+      const reported = result.reported || {};
+      if (section === "address") {
+        setDecoderAddress(reported.address);
+        if (result.control_address) {
+          const refreshed = await api.programmingAssets();
+          setProgrammingAssets(refreshed.items);
+          setAddressMessage(`Verified address ${reported.address}; Asset record updated.`);
+        } else {
+          setAddressMessage(`Decoder address ${reported.address} read successfully. Asset record was not changed.`);
+        }
+      } else {
+        setCvValue(String(reported.value));
+        setCvMessage(result.operation === "read_cv"
+          ? `CV ${reported.cv} = ${reported.value}; read successfully.`
+          : `CV ${reported.cv} = ${reported.value}; write and readback verified.`);
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Programming operation failed";
+      if (section === "address") setAddressMessage(text); else setCvMessage(text);
+    } finally {
+      setProgrammingBusy(false);
+    }
+  }
 
   return (
     <main className="shell">
@@ -333,13 +381,13 @@ export default function App() {
 
       <nav className="tabs" aria-label="Control area">
         <button className={area === "operation" ? "current" : ""} aria-current={area === "operation" ? "page" : undefined} onClick={() => setArea("operation")}>Operation</button>
-        <button disabled>Programming</button>
+        <button className={area === "programming" ? "current" : ""} onClick={() => setArea("programming")}>Programming</button>
         <button className={area === "turnout" ? "current" : ""} onClick={() => setArea("turnout")}>Turnout</button>
         <button className={area === "signal" ? "current" : ""} onClick={() => setArea("signal")}>Signal</button>
         <button className={area === "machine" ? "current" : ""} onClick={() => setArea("machine")}>Machine</button>
       </nav>
 
-      {area !== "operation" && (
+      {!(["operation", "programming"] as string[]).includes(area) && (
         <section className="panel accessory-panel">
           <div className="row">
             <h2>{area[0].toUpperCase() + area.slice(1)}</h2>
@@ -358,6 +406,47 @@ export default function App() {
           {!accessoryReady && <p className="notice">MC broker or node is not ready. No command will be sent.</p>}
         </section>
       )}
+
+      {area === "programming" && <div className="programming-layout">
+        <section className="panel">
+          <div className="row"><div><h2>Programming track</h2><span className="device-kind">EX-CSB1 · USB SERIAL</span></div>
+            <span className={`pill ${programmingReady ? "" : "error"}`}>{programmingReady ? "ready" : "not ready"}</span></div>
+          <div className="track-grid">
+            <div className="track"><strong>{snapshot.device.main.letter || "A"} · MAIN</strong><span>test_main_1 · power {snapshot.device.main.power}</span></div>
+            <div className="track"><strong>{snapshot.device.prog?.letter || "B"} · PROG</strong><span>test_prog_1 · isolated</span></div>
+          </div>
+          <p className={`status-line ${programmingReady ? "ready" : "warn"}`}>{programmingReady ? "One decoder only. MAIN is confirmed off." : "Connect EX-CSB1, verify a PROG output, and turn MAIN power off."}</p>
+        </section>
+        <section className="panel">
+          <h2>Decoder on test_prog_1</h2>
+          <Picker label="Programming Asset" items={[{value: "", label: "Unassigned decoder"}, ...programmingAssets.map((item) => ({value: item.id, label: `${[item.reporting_mark, item.road_number].filter(Boolean).join(" ") || item.id}${item.prototype ? ` · ${item.prototype}` : ""}`}))]}
+            value={programmingAsset} placeholder="Unassigned decoder" disabled={programmingBusy}
+            onChange={(value) => {setProgrammingAsset(value); setDecoderAddress(null); setDecoderMessage("Asset selected. Waiting for a programming action.");}} />
+          <div className="asset-meta"><span>{selectedProgrammingAsset ? `${selectedProgrammingAsset.id} · maintenance` : "No Asset selected"}</span><span>{selectedProgrammingAsset?.address ? `recorded DCC ${selectedProgrammingAsset.address}` : "address unknown"}</span></div>
+          <label className="confirm"><input type="checkbox" checked={onlyDecoder} onChange={(event) => setOnlyDecoder(event.target.checked)} /><span>I confirm this is the only locomotive or decoder on the isolated programming track.</span></label>
+          <p className="status-line">{decoderMessage}</p>
+        </section>
+        <section className="panel">
+          <div className="row"><h2>Decoder address</h2><span className="pill">{decoderAddress === null ? "not read" : decoderAddress === selectedProgrammingAsset?.address ? "verified" : "read"}</span></div>
+          <div className="address-grid">
+            <div className="reading"><span>Recorded</span><strong>{selectedProgrammingAsset?.address ?? "—"}</strong></div>
+            <div className="reading"><span>Decoder</span><strong>{decoderAddress ?? "—"}</strong></div>
+            <label className="reading"><span>New address</span><input inputMode="numeric" value={newAddress} onChange={(event) => setNewAddress(event.target.value)} /></label>
+          </div>
+          <div className="address-actions">
+            <button disabled={!programmingReady || !onlyDecoder || programmingBusy} onClick={() => {setAddressMessage("Reading effective decoder address…"); performProgramming("address", () => api.readAddress(programmingAsset || null));}}>Read Address</button>
+            <button disabled={!programmingReady || !onlyDecoder || programmingBusy || !selectedProgrammingAsset || !newAddress} onClick={() => {setAddressMessage(`Writing address ${newAddress}, then reading it back…`); performProgramming("address", () => api.writeAddress(programmingAsset, Number(newAddress)));}}>Write Address</button>
+          </div>
+          <p className="status-line" role="status">{addressMessage}</p>
+        </section>
+        <section className="panel">
+          <h2>Configuration variable</h2>
+          <div className="cv-fields"><label><span>CV number</span><input inputMode="numeric" value={cvNumber} onChange={(event) => setCvNumber(event.target.value)} /></label><label><span>Value</span><input inputMode="numeric" value={cvValue} onChange={(event) => setCvValue(event.target.value)} /></label></div>
+          <div className="cv-actions"><button disabled={!programmingReady || !onlyDecoder || programmingBusy || !selectedProgrammingAsset} onClick={() => {setCvMessage(`Reading CV ${cvNumber}…`); performProgramming("cv", () => api.readCv(programmingAsset, Number(cvNumber)));}}>Read CV</button><button disabled={!programmingReady || !onlyDecoder || programmingBusy || !selectedProgrammingAsset || cvValue === ""} onClick={() => {setCvMessage(`Writing CV ${cvNumber}, then reading it back…`); performProgramming("cv", () => api.writeCv(programmingAsset, Number(cvNumber), Number(cvValue)));}}>Write CV</button></div>
+          <p className="status-line" role="status">{cvMessage}</p>
+        </section>
+        <section className="panel test-panel"><div className="row"><h2>Test on PROG track</h2><span className="pill">later</span></div><button disabled>Enter Test Mode</button><p className="status-line">Waiting for JOIN/DriveAway commissioning and a verified programming operation.</p></section>
+      </div>}
 
       {area === "operation" && <><section className="panel roster-panel">
         <Picker label="Active locomotive" items={rosterItems} value={selectedAsset}

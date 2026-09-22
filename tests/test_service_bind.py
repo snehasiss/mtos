@@ -121,6 +121,37 @@ def test_asset_control_name_canonicalizes_to_mtos_hmi(tmp_path, monkeypatch, cap
     assert not (tmp_path / "run/asset_control.lock").exists()
 
 
+def test_admin_service_defaults_to_public_port_5300(tmp_path, monkeypatch, capsys):
+    spec = importlib.util.spec_from_file_location(
+        "service_admin", PROJECT / "tools/service.py"
+    )
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+    monkeypatch.setattr(service, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(service.time, "sleep", lambda _: None)
+    monkeypatch.setattr(service.secrets, "token_hex", lambda _: "instance")
+    state = {}
+
+    def launch(command, **kwargs):
+        state["command"] = command
+        return SimpleNamespace(pid=456, poll=lambda: None)
+
+    def health(url, timeout):
+        assert url == "http://127.0.0.1:5300/health"
+        return io.BytesIO(json.dumps({"pid": 456, "instance": "instance"}).encode())
+
+    monkeypatch.setattr(service.subprocess, "Popen", launch)
+    monkeypatch.setattr(service.urllib.request, "urlopen", health)
+    monkeypatch.setattr(
+        sys, "argv", ["service.py", "--service", "mtos_admin", "start"]
+    )
+    service.main()
+    command = state["command"]
+    assert command[command.index("--host") + 1] == "0.0.0.0"
+    assert command[command.index("--port") + 1] == "5300"
+    assert "0.0.0.0:5300" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     ("service_name", "expected_port"), [("mtos_core", 5303), ("mtos_dcc", 5304)]
 )

@@ -2,6 +2,7 @@
 import argparse
 import fcntl
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -15,14 +16,18 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5301)
     parser.add_argument(
         "--service",
-        choices=("mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core", "mtos_mc"),
+        choices=("mtos_admin", "mtos_asset", "asset_manager", "asset_control", "mtos_hmi", "mtos_dcc", "mtos_core", "mtos_mc"),
         default="mtos_asset",
     )
     args = parser.parse_args()
     if args.host is None:
-        args.host = "0.0.0.0" if args.service in ("mtos_asset", "asset_manager", "asset_control", "mtos_hmi") else "127.0.0.1"
+        args.host = "0.0.0.0" if args.service in ("mtos_admin", "mtos_asset", "asset_manager", "asset_control", "mtos_hmi") else "127.0.0.1"
     socketio = None
-    if args.service == "asset_control":
+    if args.service == "mtos_admin":
+        from mtos.admin_app import create_admin_app
+
+        app = create_admin_app()
+    elif args.service == "asset_control":
         from mtos.control_app import create_control_app
 
         app = create_control_app()
@@ -49,8 +54,10 @@ if __name__ == "__main__":
     root = data_root()
     root.parent.mkdir(parents=True, exist_ok=True)
     # Shared lifetime lock: restoration takes the exclusive lock before replacing data.
-    with (root.parent / f".{root.name}.services.lock").open("a") as lifetime:
-        fcntl.flock(lifetime, fcntl.LOCK_SH)
+    lifetime_context = nullcontext() if args.service == "mtos_admin" else (root.parent / f".{root.name}.services.lock").open("a")
+    with lifetime_context as lifetime:
+        if lifetime is not None:
+            fcntl.flock(lifetime, fcntl.LOCK_SH)
         if socketio is not None:
             socketio.run(
                 app, host=args.host, port=args.port,

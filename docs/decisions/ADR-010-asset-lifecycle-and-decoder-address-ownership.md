@@ -48,9 +48,14 @@ different write paths:
    the decoder. This path exists for imports, corrections and externally
    programmed decoders. It never claims physical synchronization.
 
-Short addresses use CV1 and clear CV29 bit 5. Long addresses use CV17/CV18 and
-set CV29 bit 5. CV29's other bits are preserved. Version 1 supports addresses
-1–10239. Programming commands are not automatically retried after timeout.
+Version 1 supports addresses 1–10239. Programming commands are not automatically
+retried after timeout. The original implementation manually wrote CV1/CV17/CV18/
+CV29; the 2026-09-21 CV-programming review found that current DCC-EX guidance
+requires its dedicated address command so consist and all required addressing CVs
+are handled together. The manual sequence has now been replaced in software, but
+the dedicated command remains physically uncommissioned. The design is recorded in
+[the CV programming plan](../architecture/cv-programming-plan.md); this correction
+does not change Asset/Core/DCC ownership or uncertain-result semantics.
 
 ### Failure outcomes
 
@@ -71,13 +76,13 @@ blindly retry because the decoder may already use the new address.
   outcome, and conditional Asset update.
 - `mtos_dcc`: exclusive serial programming, PROG/MAIN safety checks and CV
   readback; no Asset database access.
-- `mtos_hmi`: future operator-facing Programming workflow; no authoritative
+- `mtos_hmi`: operator-facing Programming workflow; no authoritative
   persistence.
 
 ## Implementation checkpoint
 
-The service APIs, CV encoding/parsing, guarded address-programming workflow,
-readback, conditional Asset update and automated fake-transport tests are
-implemented. The HMI Programming tab and supervised physical EX-CSB1/decoder
-commissioning remain pending. Until those are complete, the backend is not a
-claim that address programming has been proven on hardware.
+The service APIs, dedicated DCC-EX address command, CV encoding/parsing, guarded
+address-programming workflow, readback, conditional Asset update, automated fake
+transport tests and HMI Programming tab are implemented. Supervised physical
+EX-CSB1/decoder commissioning remains pending. Until it is complete, the controls
+must not be used to program a real decoder and are not a claim of hardware success.

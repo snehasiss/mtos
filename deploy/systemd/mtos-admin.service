@@ -1,0 +1,19 @@
+[Unit]
+Description=MTOS administration interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=MTOS_USER
+Group=MTOS_USER
+WorkingDirectory=MTOS_PROJECT_ROOT
+EnvironmentFile=/etc/mtos/admin.env
+ExecStart=/usr/bin/python3 MTOS_PROJECT_ROOT/tools/serve.py --service mtos_admin --host 0.0.0.0 --port 5300
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

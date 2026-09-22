@@ -27,6 +27,11 @@ class FakeAsset:
         return [{"id": "L001", "reporting_mark": "UP", "road_number": "28",
                  "prototype": "8500_gtel", "address": 28}]
 
+    def programming_assets(self):
+        return [{"id": "L001", "reporting_mark": "UP", "road_number": "28",
+                 "prototype": "8500_gtel", "address": 28, "revision": 7,
+                 "status": "maintenance", "location": "test_prog_1"}]
+
     def update_programmed_address(self, asset_id, revision, address):
         assert asset_id == "L001" and revision == self.asset["revision"]
         self.asset["control"]["address"] = address
@@ -69,6 +74,18 @@ class FakeDcc:
         self.calls.append(("program_address", envelope))
         return {"outcome": "confirmed", "operation": "program_address",
                 "reported": {"address": envelope["new_address"], "cvs": {1: envelope["new_address"]}}}
+
+    def read_address(self, envelope):
+        self.calls.append(("read_address", envelope))
+        return {"outcome": "confirmed", "operation": "read_address", "reported": {"address": 28}}
+
+    def read_cv(self, envelope):
+        self.calls.append(("read_cv", envelope))
+        return {"outcome": "confirmed", "operation": "read_cv", "reported": {"cv": envelope["cv"], "value": 151}}
+
+    def program_cv(self, envelope):
+        self.calls.append(("program_cv", envelope))
+        return {"outcome": "confirmed", "operation": "program_cv", "reported": {"cv": envelope["cv"], "value": envelope["value"]}}
 
 
 class FakeMc:
@@ -163,6 +180,7 @@ def test_core_epoch_increases_across_service_restart(tmp_path):
 def test_core_programs_then_commits_decoder_address(tmp_path):
     service = make_service(tmp_path)
     service.asset.asset["lifecycle"]["status"] = "maintenance"
+    service.asset.asset["lifecycle"]["location"] = "test_prog_1"
     service.start()
     result = service.program_address("L001", 29, "program-1")
     assert result["outcome"] == "confirmed"
@@ -176,9 +194,31 @@ def test_core_programs_then_commits_decoder_address(tmp_path):
     assert tuple(row) == ("completed", "confirmed")
 
 
+def test_core_reads_unassigned_address_and_programs_cv_on_prog_track(tmp_path):
+    service = make_service(tmp_path)
+    service.asset.asset["lifecycle"].update(status="maintenance", location="test_prog_1")
+    service.start()
+    address = service.read_address(None, "read-address-1")
+    assert address["reported"]["address"] == 28
+    read = service.read_cv("L001", 8, "read-cv-1")
+    assert read["reported"] == {"cv": 8, "value": 151}
+    written = service.program_cv("L001", 8, 151, "write-cv-1")
+    assert written["reported"] == {"cv": 8, "value": 151}
+
+
+def test_core_refuses_programming_asset_off_prog_track(tmp_path):
+    service = make_service(tmp_path)
+    service.asset.asset["lifecycle"]["status"] = "maintenance"
+    service.start()
+    import pytest
+    with pytest.raises(Exception, match="test_prog_1"):
+        service.program_address("L001", 29, "wrong-track")
+
+
 def test_core_records_uncertain_if_asset_commit_fails_after_programming(tmp_path):
     service = make_service(tmp_path)
     service.asset.asset["lifecycle"]["status"] = "maintenance"
+    service.asset.asset["lifecycle"]["location"] = "test_prog_1"
     service.start()
     service.asset.update_programmed_address = lambda *_: (_ for _ in ()).throw(
         RuntimeError("asset update failed")

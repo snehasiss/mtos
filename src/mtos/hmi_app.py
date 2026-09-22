@@ -100,6 +100,10 @@ def create_hmi_app(config=None):
     def stationary_request(_payload=None):
         return {"items": service.stationary()}
 
+    @socketio.on("programming.request")
+    def programming_request(_payload=None):
+        return {"items": service.programming_assets()}
+
     @socketio.on("control.command")
     def command(value):
         try:

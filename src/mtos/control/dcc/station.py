@@ -17,6 +17,8 @@ from ..models import (
 )
 from .protocol import (
     Framer,
+    encode_address_read,
+    encode_address_write,
     encode_emergency_stop,
     encode_cv_read,
     encode_cv_write,
@@ -172,32 +174,49 @@ class DccExStation:
             raise RuntimeError(f"Decoder did not confirm writing CV {cv}")
         return value
 
+    def program_cv(self, cv, value):
+        """Write one CV and independently read it back on the PROG output."""
+        with self._operation_lock:
+            self.write_cv(cv, value)
+            reported = self.read_cv(cv)
+            if reported != value:
+                raise RuntimeError(f"CV {cv} readback did not match the requested value")
+            return CommandResult(
+                "confirmed", "program_cv",
+                requested={"cv": cv, "value": value},
+                reported={"cv": cv, "value": reported},
+            )
+
+    def read_address(self):
+        event = self._program_request(
+            encode_address_read(),
+            lambda candidate: candidate.kind == "decoder_address",
+        )
+        address = event.data["address"]
+        if address < 1:
+            raise RuntimeError("Decoder address could not be read")
+        return CommandResult(
+            "confirmed", "read_address", reported={"address": address}
+        )
+
     def program_address(self, old_address, new_address):
         with self._operation_lock:
             _ = old_address  # Service-mode programming is address-independent.
             if type(new_address) is not int or not 1 <= new_address <= 10239:
                 raise ValueError("new DCC address must be from 1 through 10239")
-            cv29 = self.read_cv(29)
-            if new_address <= 127:
-                expected = {1: new_address, 29: cv29 & ~0x20}
-                self.write_cv(1, expected[1])
-                self.write_cv(29, expected[29])
-            else:
-                expected = {
-                    17: 192 + (new_address // 256),
-                    18: new_address % 256,
-                    29: cv29 | 0x20,
-                }
-                self.write_cv(17, expected[17])
-                self.write_cv(18, expected[18])
-                self.write_cv(29, expected[29])
-            verified = {cv: self.read_cv(cv) for cv in expected}
-            if verified != expected:
+            event = self._program_request(
+                encode_address_write(new_address),
+                lambda candidate: candidate.kind == "decoder_address",
+            )
+            if event.data.get("address") != new_address:
+                raise RuntimeError("Decoder did not confirm the requested address")
+            readback = self.read_address().reported["address"]
+            if readback != new_address:
                 raise RuntimeError("Decoder address readback did not match the requested address")
             return CommandResult(
                 "confirmed", "program_address",
                 requested={"old_address": old_address, "new_address": new_address},
-                reported={"address": new_address, "cvs": verified},
+                reported={"address": readback},
             )
 
     def stop(self, address, direction):

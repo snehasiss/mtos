@@ -90,6 +90,10 @@ def create_core_app(config=None):
     def hmi_stationary():
         return jsonify(items=service.hmi_stationary())
 
+    @app.get("/v1/hmi/programming-assets")
+    def hmi_programming_assets():
+        return jsonify(items=service.hmi_programming_assets())
+
     @app.post("/v1/hmi/commands")
     def hmi_command():
         value = body()

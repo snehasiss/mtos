@@ -35,7 +35,7 @@ commissioning remain pending.
 Current limitations are explicit: the coordinated backend for decoder-address
 programming exists, but its HMI and physical EX-CSB1/decoder commissioning are
 not complete. General CV programming, occupancy, routes, interlocking, autonomy,
-systemd deployment, history pruning and physical ESP32 commissioning also remain
+history pruning and physical ESP32 commissioning also remain
 incomplete. Accessory controls stay disabled while MQTT or the selected node is
 not ready.
 
@@ -52,12 +52,13 @@ manage the service. It binds to `0.0.0.0` by default. For a phone on a trusted L
 open the host's LAN IP address on port 5301. Use `--host 127.0.0.1` explicitly
 for local-only access. This release has no account authentication.
 
-The database lives in `data/db/`; photos live in `data/media/`. Both are excluded
-from Git. Backups are manually invoked to an existing mounted destination:
+The database lives in `data/db/`; photos live in `data/media/`. The complete
+`data/` tree is excluded from Git. On the Cubietruck, `mtos_admin` provides
+authenticated remote backup and restore using `rsync` over SSH-key login; local
+backup destinations are deliberately not supported. Image import remains a
+command-line utility:
 
 ```bash
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --backup
-tools/mtos_backup --remote ~/gdrive/backup/mtos/data --restore
 python3 tools/import_image.py --source ~/Pictures/train-photos/
 ```
 
@@ -91,6 +92,20 @@ The generated files under `src/mtos/control_ui/` are part of the application and
 must be updated together with their React source.
 
 Current design material is under [`docs/`](docs/README.md).
+
+## Administer the Cubietruck
+
+`mtos_admin` listens on trusted-LAN port 5300 and is the only MTOS process that
+starts automatically with the operating system. Its iPhone-first interface
+shows service state and starts, stops or restarts the complete application
+stack. It also backs up or restores the complete `data/` directory to a remote
+`user@host:/absolute/path` via key-authenticated SSH, and updates a clean Git
+checkout without creating commits.
+
+The SSH key, known host, remote directory permissions, admin token and session
+secret require one-time installation setup. See the
+[administration guide](docs/operations/admin.md). Do not enable the five
+application services individually at boot.
 
 The stack coordinator starts Asset, DCC, MC and Core, establishes fenced
 Core–DCC and Core–MC sessions, and starts HMI only after Core is ready. It stops

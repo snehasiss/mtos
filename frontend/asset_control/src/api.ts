@@ -1,6 +1,8 @@
 import {io} from "socket.io-client";
 import type {
   ControlSnapshot,
+  CommandEvent,
+  ProgrammingAsset,
   RosterLocomotive,
   SerialDevice,
   SessionSnapshot,
@@ -65,17 +67,47 @@ async function command(operation: string, payload: Record<string, unknown>) {
   return value;
 }
 
+async function completedCommand(operation: string, payload: Record<string, unknown>) {
+  await connect();
+  const id = commandId();
+  return new Promise<Record<string, any>>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      socket.off("command.event", receive);
+      reject(new Error("Programming response timed out"));
+    }, 100_000);
+    function finish() {
+      window.clearTimeout(timer);
+      socket.off("command.event", receive);
+    }
+    function receive(event: CommandEvent) {
+      if (event.command_id !== id) return;
+      if (event.event === "command.completed") {
+        finish(); resolve(event.result ?? {});
+      } else if (event.event === "command.failed") {
+        finish(); reject(new Error(event.error ?? "Programming command failed"));
+      }
+    }
+    socket.on("command.event", receive);
+    emitAck<{accepted: boolean; error?: string}>("control.command", {
+      command_id: id, client_seq: clientSequence++, operation, payload,
+    }).then((value) => {
+      if (!value.accepted) { finish(); reject(new Error(value.error ?? "Command rejected")); }
+    }).catch((error) => { finish(); reject(error); });
+  });
+}
+
 export const api = {
   session: async (): Promise<SessionSnapshot> => ({...(await connect()), csrf: ""}),
   snapshot: () => emitAck<ControlSnapshot>("control.snapshot.request"),
   locomotives: () => emitAck<{items: RosterLocomotive[]}>("roster.request"),
   devices: () => emitAck<{items: SerialDevice[]}>("devices.request"),
   stationary: () => emitAck<{items: StationaryAsset[]}>("stationary.request"),
+  programmingAssets: () => emitAck<{items: ProgrammingAsset[]}>("programming.request"),
   subscribeSnapshot: (handler: (snapshot: ControlSnapshot) => void) => {
     socket.on("control.snapshot", handler);
     return () => { socket.off("control.snapshot", handler); };
   },
-  subscribeCommandEvents: (handler: (event: {event: string; error?: string}) => void) => {
+  subscribeCommandEvents: (handler: (event: CommandEvent) => void) => {
     socket.on("command.event", handler);
     return () => { socket.off("command.event", handler); };
   },
@@ -92,4 +124,8 @@ export const api = {
   turnout: (assetId: string, value: "straight" | "diverging") => command("turnout.set", {asset_id: assetId, value}),
   signal: (assetId: string, value: "stop" | "slow" | "go") => command("signal.set", {asset_id: assetId, value}),
   machine: (assetId: string, value: string) => command("machine.execute", {asset_id: assetId, value}),
+  readAddress: (assetId: string | null) => completedCommand("programming.address.read", {asset_id: assetId}),
+  writeAddress: (assetId: string, newAddress: number) => completedCommand("programming.address.write", {asset_id: assetId, new_address: newAddress}),
+  readCv: (assetId: string, cv: number) => completedCommand("programming.cv.read", {asset_id: assetId, cv}),
+  writeCv: (assetId: string, cv: number, value: number) => completedCommand("programming.cv.write", {asset_id: assetId, cv, value}),
 };

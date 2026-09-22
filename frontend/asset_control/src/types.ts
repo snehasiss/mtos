@@ -19,6 +19,7 @@ export type DeviceState = {
   last_seen: string | null;
   stale: boolean;
   main: {letter: string | null; mode: string | null; power: PowerState};
+  prog: {letter: string | null; mode: string | null; power: PowerState};
   error: string | null;
   locomotives: Record<string, LocomotiveState>;
 };
@@ -44,6 +45,19 @@ export type RosterLocomotive = {
   road_number: string | null;
   prototype: string | null;
   address: number;
+};
+
+export type ProgrammingAsset = RosterLocomotive & {
+  revision: number;
+  status: "maintenance";
+  location: "test_prog_1";
+};
+
+export type CommandEvent = {
+  event: string;
+  command_id?: string;
+  error?: string;
+  result?: Record<string, any>;
 };
 
 export type SerialDevice = {

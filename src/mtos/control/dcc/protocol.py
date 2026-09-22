@@ -82,6 +82,15 @@ def encode_cv_write(cv: int, value: int) -> str:
     return f"<W {cv} {value}>"
 
 
+def encode_address_read() -> str:
+    return "<R>"
+
+
+def encode_address_write(address: int) -> str:
+    _address(address)
+    return f"<W {address}>"
+
+
 def encode_emergency_stop() -> str:
     return "<!>"
 
@@ -101,6 +110,8 @@ def parse_frame(frame: str) -> ProtocolEvent:
     if body.startswith("r"):
         parts = body[1:].strip().split()
         try:
+            if len(parts) == 1:
+                return ProtocolEvent("decoder_address", {"address": int(parts[0])}, frame)
             if len(parts) == 2 and "|" in parts[0]:
                 callback, callback_sub, cv = parts[0].split("|")
                 return ProtocolEvent(
