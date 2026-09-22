@@ -114,7 +114,10 @@ def validate(payload):
     if control.get("node_id"):
         control["node_id"] = AssetId(control["node_id"])
     if control.get("decoder"):
-        control["decoder"] = Decoder(**control["decoder"])
+        decoder = control["decoder"]
+        if not isinstance(decoder, dict) or set(decoder) - {"maker", "model", "serial_number"}:
+            raise ValueError("decoder must contain a model")
+        control["decoder"] = Decoder(maker=decoder.get("maker"), model=decoder.get("model"))
     for key in ("address", "speed_steps"):
         if control.get(key) is not None and type(control[key]) is not int:
             raise ValueError(f"{key} must be an integer")

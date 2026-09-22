@@ -82,7 +82,7 @@ def test_grouped_asset_payload_is_compact_and_searchable() -> None:
         ),
         control=Control(
             dcc=True,
-            decoder=Decoder(maker="esu", model="lokpilot_5"),
+            decoder=Decoder(maker="esu", model="loksound_5"),
             address=4202,
             speed_steps=128,
         ),
@@ -94,6 +94,13 @@ def test_grouped_asset_payload_is_compact_and_searchable() -> None:
     assert payload["control"]["address"] == 4202
     assert "node_id" not in payload["control"]
     assert "lifecycle" not in payload
+
+
+def test_decoder_maker_is_controlled_and_model_is_canonical_text() -> None:
+    assert Decoder(maker="esu", model="LokSound 5").model == "loksound_5"
+    assert Decoder(maker="unknown", model=None).model is None
+    with pytest.raises(ValueError, match="unsupported decoder maker"):
+        Decoder(maker="made_up", model="new_model")
 
 
 def test_lifecycle_is_a_separate_record_keyed_by_asset_id() -> None:

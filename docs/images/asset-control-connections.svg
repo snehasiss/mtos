@@ -1,113 +1,182 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title desc">
-  <title id="title">MTOS asset control component connections</title>
-  <desc id="desc">The Cubietruck controls an EX-CSB1 through USB serial and an ESP32 accessory node through MQTT over Wi-Fi. A 12 volt bus feeds an XL4015 converter. The ESP32 controls SG90 turnout servos through a PCA9685 and signal LEDs through cascaded 74HC595 shift registers. Machines use an electrically appropriate isolated relay or driver.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060" role="img" aria-labelledby="title desc">
+  <title id="title">MTOS stationary-asset node electronic circuit</title>
+  <desc id="desc">Electronic connection schematic for a twelve volt MTOS accessory node. An XL4015 supplies five volts directly to the ESP32, PCA9685 servo rail, and SG90 servo. The ESP32 controls the PCA9685, a 74HC595 LED driver, and a relay whose twelve volt input and switched output operate a Broadway Limited 7924 water tower.</desc>
   <defs>
     <style>
-      .bg{fill:#f7f5ef}.group{fill:#fff;stroke:#9b8c78;stroke-width:2}.core{fill:#dcefdc;stroke:#14675f;stroke-width:3}.device{fill:#edf4f2;stroke:#315f5a;stroke-width:2}.power{fill:#fff1d6;stroke:#bd7c18;stroke-width:2}.load{fill:#f5eadb;stroke:#855f37;stroke-width:2}.label{font:700 18px Inter,Arial,sans-serif;fill:#203330}.small{font:14px Inter,Arial,sans-serif;fill:#455a56}.tiny{font:12px Inter,Arial,sans-serif;fill:#5b6865}.wire{fill:none;stroke:#315f5a;stroke-width:3;marker-end:url(#arrow)}.logicwire{fill:none;stroke:#72509b;stroke-width:2.5;marker-end:url(#logicarrow)}.powerwire{fill:none;stroke:#c07913;stroke-width:4;marker-end:url(#powerarrow)}.ground{fill:none;stroke:#596963;stroke-width:2;stroke-dasharray:7 5}.radio{fill:none;stroke:#287eaa;stroke-width:3;stroke-dasharray:9 5;marker-end:url(#bluearrow)}
+      .bg{fill:#fbfaf6}.panel{fill:#fff;stroke:#5b6965;stroke-width:2}.device{fill:#f3f7f5;stroke:#234f49;stroke-width:3}.load{fill:#fff7e8;stroke:#8b6424;stroke-width:3}.powerbox{fill:#fff2d5;stroke:#a96500;stroke-width:3}.title{font:700 27px Inter,Arial,sans-serif;fill:#17322e}.section{font:700 21px Inter,Arial,sans-serif;fill:#17322e}.label{font:700 17px Inter,Arial,sans-serif;fill:#203a36}.text{font:15px Inter,Arial,sans-serif;fill:#3f504c}.tiny{font:13px Inter,Arial,sans-serif;fill:#50625e}.ref{font:700 12px ui-monospace,SFMono-Regular,Consolas,monospace;fill:#76531b}.pin{font:700 12px ui-monospace,SFMono-Regular,Consolas,monospace;fill:#27423d}.wire{fill:none;stroke:#4c5c58;stroke-width:3}.logic{fill:none;stroke:#6747a5;stroke-width:3}.network{fill:none;stroke:#167da5;stroke-width:3;stroke-dasharray:10 6}.p12{fill:none;stroke:#c3372d;stroke-width:5}.p5{fill:none;stroke:#e07b16;stroke-width:4}.p33{fill:none;stroke:#b28300;stroke-width:3}.gnd{fill:none;stroke:#202625;stroke-width:4}.node{fill:#202625}.terminal{fill:#fff;stroke:#253c38;stroke-width:2}.led-r{fill:#e5342c;stroke:#7c1e18;stroke-width:2}.led-g{fill:#28a65c;stroke:#146c38;stroke-width:2}.led-y{fill:#f0be25;stroke:#97730c;stroke-width:2}.note{fill:#f5f2e9;stroke:#a69a83;stroke-width:1.5}.switch{stroke:#253c38;stroke-width:4;fill:none;stroke-linecap:round}.dot{fill:#253c38}.arrow{fill:#6747a5}
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#315f5a"/></marker>
-    <marker id="powerarrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#c07913"/></marker>
-    <marker id="bluearrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#287eaa"/></marker>
-    <marker id="logicarrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#72509b"/></marker>
+    <marker id="logic-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" class="arrow"/></marker>
   </defs>
 
-  <rect class="bg" width="1200" height="820"/>
-  <text class="label" x="40" y="38">MTOS — physical device and power connections</text>
-  <text class="small" x="40" y="62">Component overview — not a pin-level wiring schematic; shared SQLite configuration; local node grounding</text>
+  <rect class="bg" width="1600" height="1060"/>
+  <text class="title" x="42" y="42">MTOS — stationary-asset node electronic circuit</text>
+  <text class="text" x="42" y="69">N001 reference design · 12 V distribution · regulated 5 V actuation · 3.3 V logic · common node ground</text>
 
-  <rect class="group" x="30" y="85" width="1140" height="190" rx="12"/>
-  <text class="label" x="50" y="115">Rolling-stock DCC control — synchronous and immediate</text>
-  <rect class="core" x="65" y="145" width="205" height="82" rx="8"/>
-  <text class="label" x="85" y="178">Cubietruck A20</text>
-  <text class="small" x="85" y="202">mtos_core + mtos_dcc</text>
-  <rect class="power" x="65" y="238" width="205" height="25" rx="5"/>
-  <text class="tiny" x="101" y="255">Dedicated 5 V / 2 A</text>
-  <rect class="device" x="390" y="145" width="205" height="82" rx="8"/>
-  <text class="label" x="438" y="178">EX-CSB1</text>
-  <text class="small" x="420" y="202">DCC-EX command station</text>
-  <rect class="power" x="390" y="238" width="205" height="25" rx="5"/>
-  <text class="tiny" x="435" y="255">Dedicated 15 V / 6 A</text>
-  <rect class="load" x="725" y="145" width="175" height="82" rx="8"/>
-  <text class="label" x="771" y="178">MAIN</text>
-  <text class="small" x="746" y="202">current test track</text>
-  <rect class="load" x="960" y="145" width="175" height="82" rx="8"/>
-  <text class="label" x="1008" y="178">PROG</text>
-  <text class="small" x="978" y="202">isolated programming track</text>
-  <path class="wire" d="M270 182 H390"/>
-  <text class="tiny" x="298" y="171">USB serial</text>
-  <path class="powerwire" d="M595 183 H725"/>
-  <text class="tiny" x="627" y="171">DCC output</text>
-  <path class="ground" d="M595 218 H665 V132 H1040 V145"/>
-  <text class="tiny" x="735" y="128">Separate PROG output — future isolated track</text>
+  <!-- Network boundary -->
+  <rect class="panel" x="35" y="92" width="1530" height="105" rx="10"/>
+  <text class="section" x="55" y="121">Host and network control</text>
+  <rect class="device" x="75" y="137" width="240" height="44" rx="5"/>
+  <text class="label" x="100" y="165">Linux SBC · mtos_mc</text>
+  <path class="network" d="M315 159H525"/>
+  <text class="tiny" x="355" y="148">Wi-Fi · MQTT</text>
+  <rect class="device" x="525" y="120" width="265" height="65" rx="6"/>
+  <text class="ref" x="540" y="140">U1</text>
+  <text class="label" x="585" y="151">ESP32 node N001</text>
+  <text class="tiny" x="568" y="173">firmware + asset/channel map</text>
+  <text class="text" x="870" y="153">Commands are queued; SG90 movements are globally serialized.</text>
 
-  <rect class="group" x="30" y="295" width="1140" height="485" rx="12"/>
-  <text class="label" x="50" y="327">Stationary-asset control — asynchronous, queued, sequenced</text>
-  <rect class="core" x="65" y="360" width="205" height="92" rx="8"/>
-  <text class="label" x="85" y="392">Cubietruck A20</text>
-  <text class="small" x="85" y="416">mtos_mc + Mosquitto</text>
-  <text class="tiny" x="85" y="437">SQLite command state</text>
-  <rect class="device" x="390" y="350" width="220" height="112" rx="8"/>
-  <text class="label" x="442" y="382">ESP32 N001</text>
-  <text class="small" x="413" y="406">node firmware + asset map</text>
-  <text class="tiny" x="413" y="429">turnout → PCA channel</text>
-  <text class="tiny" x="413" y="447">signal aspect → 74HC595 Q</text>
-  <path class="radio" d="M270 405 H390"/>
-  <text class="tiny" x="295" y="390">Wi-Fi / MQTT</text>
+  <!-- Power supply and rails -->
+  <rect class="panel" x="35" y="215" width="1530" height="190" rx="10"/>
+  <text class="section" x="55" y="245">Power distribution</text>
+  <rect class="powerbox" x="75" y="270" width="205" height="95" rx="6"/>
+  <text class="ref" x="90" y="291">PS1</text>
+  <text class="label" x="117" y="315">12 V DC · 5 A</text>
+  <text class="tiny" x="116" y="339">regulated SMPS</text>
+  <circle class="terminal" cx="266" cy="296" r="7"/><text class="pin" x="240" y="286">+12</text>
+  <circle class="terminal" cx="266" cy="343" r="7"/><text class="pin" x="238" y="365">0V</text>
 
-  <rect class="power" x="65" y="520" width="205" height="76" rx="8"/>
-  <text class="label" x="94" y="550">12 V accessory bus</text>
-  <text class="small" x="102" y="574">fused node branch</text>
-  <rect class="power" x="390" y="520" width="220" height="76" rx="8"/>
-  <text class="label" x="452" y="550">XL4015</text>
-  <text class="small" x="426" y="574">12 V DC → regulated 5 V</text>
-  <path class="powerwire" d="M270 558 H390"/>
+  <rect class="powerbox" x="335" y="274" width="90" height="44" rx="4"/>
+  <text class="ref" x="346" y="292">F1</text><text class="tiny" x="348" y="309">node fuse</text>
+  <path class="p12" d="M273 296H335M425 296H1535"/>
+  <text class="pin" x="1410" y="286">+12 V BUS</text>
+  <circle class="node" cx="455" cy="296" r="6"/><circle class="node" cx="1245" cy="296" r="6"/>
 
-  <rect class="device" x="700" y="335" width="205" height="98" rx="8"/>
-  <text class="label" x="756" y="366">PCA9685</text>
-  <text class="small" x="729" y="390">servo PWM only, 50 Hz</text>
-  <text class="tiny" x="725" y="413">VCC 3.3 V · V+ 5 V</text>
-  <rect class="load" x="980" y="335" width="155" height="98" rx="8"/>
-  <text class="label" x="1020" y="368">SG90</text>
-  <text class="small" x="997" y="392">turnout servo(s)</text>
-  <text class="tiny" x="998" y="414">SL-90 uses two</text>
-  <path class="wire" d="M610 380 H700"/>
-  <text class="tiny" x="628" y="366">I²C</text>
-  <path class="wire" d="M905 383 H980"/>
-  <text class="tiny" x="916" y="369">PWM</text>
+  <rect class="powerbox" x="500" y="315" width="230" height="62" rx="6"/>
+  <text class="ref" x="515" y="340">U2</text>
+  <text class="label" x="563" y="352">XL4015 buck</text>
+  <text class="tiny" x="553" y="371">12 V → regulated 5 V</text>
+  <text class="pin" x="505" y="312">IN+</text><text class="pin" x="690" y="312">OUT+</text>
+  <path class="p12" d="M455 296V320"/>
+  <path class="p5" d="M730 341H1535"/>
+  <text class="pin" x="1417" y="331">+5 V RAIL</text>
+  <circle class="node" cx="790" cy="341" r="6"/><circle class="node" cx="1050" cy="341" r="6"/>
 
-  <rect class="device" x="700" y="465" width="205" height="98" rx="8"/>
-  <text class="label" x="736" y="496">74HC595 chain</text>
-  <text class="small" x="722" y="520">signal shift registers</text>
-  <text class="tiny" x="724" y="543">3.3 V · data / clock / latch / OE</text>
-  <rect class="load" x="980" y="465" width="155" height="98" rx="8"/>
-  <text class="label" x="990" y="496">Signals / buffers</text>
-  <text class="small" x="988" y="520">one Q per LED</text>
-  <text class="tiny" x="988" y="543">resistor · local buffer flash</text>
-  <path class="wire" d="M610 435 H625 V510 H700"/>
-  <path class="wire" d="M905 513 H980"/>
-  <text class="tiny" x="925" y="500">Q0…Q7</text>
+  <path class="gnd" d="M273 343V393H1535"/>
+  <text class="pin" x="1420" y="384">0 V / GND</text>
+  <path class="gnd" d="M615 377V393"/>
+  <text class="pin" x="507" y="390">IN−</text><text class="pin" x="687" y="390">OUT−</text>
+  <text class="tiny" x="795" y="369">5 V destinations: ESP32 VIN · PCA9685 V+ · SG90 +Vcc</text>
+  <text class="tiny" x="795" y="387">Common node ground; never route servo current through the ESP32 board.</text>
 
-  <rect class="device" x="700" y="600" width="205" height="98" rx="8"/>
-  <text class="label" x="738" y="631">Relay driver</text>
-  <text class="small" x="720" y="655">GPIO · transistor · flyback</text>
-  <text class="tiny" x="721" y="678">isolated NO contact</text>
-  <rect class="load" x="980" y="600" width="155" height="98" rx="8"/>
-  <text class="label" x="1012" y="631">BLI 7924</text>
-  <text class="small" x="996" y="655">relay across pushbutton</text>
-  <text class="tiny" x="1014" y="678">fused native 12 V</text>
-  <path class="wire" d="M610 445 H620 V645 H700"/>
-  <path class="wire" d="M905 649 H980"/>
+  <!-- Turnout circuit -->
+  <rect class="panel" x="35" y="425" width="750" height="270" rx="10"/>
+  <text class="section" x="55" y="455">Turnout (SG90 → PECO SL)</text>
+  <rect class="device" x="75" y="495" width="205" height="140" rx="6"/>
+  <text class="ref" x="90" y="518">U1 · ESP32</text>
+  <text class="pin" x="218" y="535">3V3</text><circle class="terminal" cx="267" cy="530" r="6"/>
+  <text class="pin" x="225" y="568">SDA</text><circle class="terminal" cx="267" cy="563" r="6"/>
+  <text class="pin" x="225" y="601">SCL</text><circle class="terminal" cx="267" cy="596" r="6"/>
+  <text class="pin" x="225" y="625">GND</text><circle class="terminal" cx="267" cy="620" r="6"/>
+  <path class="p33" d="M267 530H340"/>
+  <path class="logic" d="M267 563H340M267 596H340"/>
+  <path class="gnd" d="M267 620H315V675"/>
 
-  <path class="powerwire" d="M610 558 H650 V414 H700"/>
-  <path class="powerwire" d="M610 577 H635 V451 H505 V462"/>
-  <text class="tiny" x="617" y="602">5 V rail to ESP32 VIN and servo V+</text>
-  <path class="logicwire" d="M505 462 V487 H700"/>
-  <text class="tiny" x="536" y="480">ESP32 3.3 V logic</text>
-  <path class="powerwire" d="M270 575 H320 V732 H955 V650 H980"/>
-  <text class="tiny" x="339" y="749">separate fused 12 V machine branch where required</text>
+  <rect class="device" x="340" y="480" width="205" height="170" rx="6"/>
+  <text class="ref" x="355" y="503">U3</text><text class="label" x="397" y="506">PCA9685</text>
+  <text class="pin" x="348" y="535">VCC 3V3</text>
+  <text class="pin" x="348" y="568">SDA</text>
+  <text class="pin" x="348" y="601">SCL</text>
+  <text class="pin" x="348" y="635">GND</text>
+  <text class="pin" x="478" y="535">V+ 5V</text><circle class="terminal" cx="532" cy="530" r="6"/>
+  <text class="pin" x="465" y="584">CHn PWM</text><circle class="terminal" cx="532" cy="579" r="6"/>
+  <path class="p5" d="M585 465V530H532M585 530V535H613"/>
+  <circle class="node" cx="585" cy="530" r="5"/>
+  <text class="pin" x="592" y="478">+5 V · XL4015 OUT+</text>
+  <path class="logic" d="M532 579H600" marker-end="url(#logic-arrow)"/>
+  <path class="gnd" d="M442 650V675"/>
 
-  <path class="ground" d="M390 720 H905"/>
-  <path class="ground" d="M500 596 V720 M802 433 V720 M802 563 V720 M802 698 V720"/>
-  <text class="tiny" x="520" y="714">common node ground: XL4015 · ESP32 · PCA9685 · 74HC595 · drivers</text>
-  <text class="tiny" x="40" y="802">Assembly details pending: GPIO/pins, OE/reset defaults, decoupling, LED polarity/resistors, connectors and measured branch fuses.</text>
+  <rect class="load" x="600" y="488" width="150" height="145" rx="6"/>
+  <text class="ref" x="615" y="510">M1</text><text class="label" x="645" y="512">SG90</text>
+  <circle class="terminal" cx="613" cy="535" r="6"/><text class="pin" x="625" y="540">+Vcc 5 V</text>
+  <circle class="terminal" cx="613" cy="579" r="6"/><text class="pin" x="625" y="584">PWM signal</text>
+  <circle class="terminal" cx="613" cy="615" r="6"/><text class="pin" x="625" y="620">GND</text>
+  <path class="p5" d="M710 460V535H613"/>
+  <path class="gnd" d="M613 615H575V675"/>
+  <path class="gnd" d="M70 675H750"/>
+  <text class="tiny" x="82" y="669">XL4015 OUT+ reaches SG90 +Vcc directly; PCA9685 supplies only the control pulse.</text>
+
+  <!-- LED circuit -->
+  <rect class="panel" x="805" y="425" width="760" height="270" rx="10"/>
+  <text class="section" x="825" y="455">Signal aspects (RG or RYG LED) · Buffer (Red LED Blink)</text>
+  <rect class="device" x="835" y="485" width="180" height="165" rx="6"/>
+  <text class="ref" x="850" y="507">U1 · ESP32</text>
+  <text class="pin" x="940" y="535">DATA</text><circle class="terminal" cx="1002" cy="530" r="6"/>
+  <text class="pin" x="935" y="568">CLOCK</text><circle class="terminal" cx="1002" cy="563" r="6"/>
+  <text class="pin" x="938" y="601">LATCH</text><circle class="terminal" cx="1002" cy="596" r="6"/>
+  <text class="pin" x="943" y="634">GND</text><circle class="terminal" cx="1002" cy="629" r="6"/>
+
+  <rect class="device" x="1065" y="475" width="190" height="185" rx="6"/>
+  <text class="ref" x="1080" y="498">U4</text><text class="label" x="1120" y="501">74HC595</text>
+  <text class="pin" x="1074" y="535">DS</text>
+  <text class="pin" x="1074" y="568">SHCP</text>
+  <text class="pin" x="1074" y="601">STCP</text>
+  <text class="pin" x="1074" y="635">GND</text>
+  <text class="pin" x="1190" y="525">Q0…Q7</text>
+  <path class="logic" d="M1002 530H1065M1002 563H1065M1002 596H1065"/>
+  <path class="gnd" d="M1002 629H1040V680M1160 660V680"/>
+  <path class="p33" d="M1130 475V466H1050"/>
+  <text class="pin" x="1060" y="489">VCC 3V3</text>
+
+  <!-- Resistors and LEDs -->
+  <path class="logic" d="M1255 515H1290"/>
+  <rect class="terminal" x="1290" y="505" width="70" height="20"/><text class="ref" x="1305" y="500">RLED</text>
+  <path class="wire" d="M1360 515H1390"/><circle class="led-r" cx="1410" cy="515" r="13"/><circle class="led-g" cx="1450" cy="515" r="13"/>
+  <text class="tiny" x="1375" y="545">RG signal</text>
+
+  <path class="logic" d="M1255 565H1290"/>
+  <rect class="terminal" x="1290" y="555" width="70" height="20"/><text class="ref" x="1305" y="550">RLED</text>
+  <path class="wire" d="M1360 565H1385"/><circle class="led-r" cx="1400" cy="565" r="12"/><circle class="led-y" cx="1435" cy="565" r="12"/><circle class="led-g" cx="1470" cy="565" r="12"/>
+  <text class="tiny" x="1371" y="595">RYG signal</text>
+
+  <path class="logic" d="M1255 620H1290"/>
+  <rect class="terminal" x="1290" y="610" width="70" height="20"/><text class="ref" x="1305" y="605">RLED</text>
+  <path class="wire" d="M1360 620H1400"/><circle class="led-r" cx="1420" cy="620" r="14"/>
+  <path class="logic" d="M1450 608q22 12 0 24"/>
+  <text class="tiny" x="1380" y="650">buffer blink</text>
+  <path class="gnd" d="M1410 528V680M1450 528V680M1400 577V680M1435 577V680M1470 577V680M1420 634V680"/>
+  <path class="gnd" d="M830 680H1530"/>
+
+  <!-- Water tower relay circuit -->
+  <rect class="panel" x="35" y="715" width="1530" height="265" rx="10"/>
+  <text class="section" x="55" y="745">Trackside (Water Tower BLI 7924)</text>
+  <rect class="device" x="75" y="785" width="205" height="120" rx="6"/>
+  <text class="ref" x="90" y="808">U1 · ESP32</text>
+  <text class="pin" x="180" y="844">GPIO signal</text><circle class="terminal" cx="267" cy="839" r="6"/>
+  <text class="pin" x="222" y="883">GND</text><circle class="terminal" cx="267" cy="878" r="6"/>
+
+  <rect class="device" x="365" y="770" width="310" height="165" rx="6"/>
+  <text class="ref" x="380" y="793">K1</text><text class="label" x="435" y="796">relay + protected driver</text>
+  <circle class="terminal" cx="380" cy="839" r="7"/><text class="pin" x="395" y="844">SIGNAL · from ESP32</text>
+  <circle class="terminal" cx="380" cy="878" r="7"/><text class="pin" x="395" y="883">GND · common return</text>
+  <circle class="terminal" cx="660" cy="817" r="7"/><text class="pin" x="552" y="810">IN / COM</text>
+  <circle class="terminal" cx="660" cy="874" r="7"/><text class="pin" x="570" y="895">OUT / NO</text>
+  <path class="logic" d="M267 839H380" marker-end="url(#logic-arrow)"/>
+  <path class="gnd" d="M267 878H380"/>
+  <path class="switch" d="M475 850h30m14 0h30m-44 0l34-24"/>
+  <text class="tiny" x="425" y="923">driver includes flyback protection; contact remains normally open</text>
+
+  <rect class="powerbox" x="745" y="785" width="125" height="48" rx="4"/>
+  <text class="ref" x="758" y="804">F2</text><text class="tiny" x="758" y="822">machine fuse</text>
+  <path class="p12" d="M1245 296V760H900V809H870"/>
+  <path class="p12" d="M745 809H700V817H660"/>
+  <text class="pin" x="882" y="800">+12 V branch</text>
+
+  <rect class="load" x="1010" y="775" width="355" height="145" rx="6"/>
+  <text class="ref" x="1025" y="798">A1</text>
+  <text class="label" x="1070" y="811">Broadway Limited BLI 7924</text>
+  <text class="text" x="1084" y="839">operating water tower</text>
+  <circle class="terminal" cx="1025" cy="874" r="7"/><text class="pin" x="1040" y="879">switched input / trigger</text>
+  <circle class="terminal" cx="1348" cy="890" r="7"/><text class="pin" x="1260" y="911">12 V return</text>
+  <path class="p12" d="M660 874H1025"/>
+  <path class="gnd" d="M1348 890H1460V945H70"/>
+  <text class="tiny" x="710" y="964">K1 exposes the three requested functional terminals: IN from 12 V bus · OUT to water tower · SIGNAL from ESP32.</text>
+
+  <!-- Legend and commissioning note -->
+  <rect class="note" x="35" y="997" width="1530" height="45" rx="5"/>
+  <path class="p12" d="M55 1019H105"/><text class="tiny" x="114" y="1024">12 V</text>
+  <path class="p5" d="M180 1019H230"/><text class="tiny" x="239" y="1024">5 V</text>
+  <path class="p33" d="M305 1019H355"/><text class="tiny" x="364" y="1024">3.3 V</text>
+  <path class="logic" d="M450 1019H500"/><text class="tiny" x="509" y="1024">logic/control</text>
+  <path class="gnd" d="M630 1019H680"/><text class="tiny" x="689" y="1024">ground/return</text>
+  <text class="tiny" x="805" y="1024">Before energizing: verify polarity, resistor/fuse values, GPIOs, relay action and measured load current.</text>
 </svg>

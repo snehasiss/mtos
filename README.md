@@ -72,13 +72,19 @@ flowchart LR
     Power[12 V accessory bus] --> Buck[XL4015<br/>12 V to 5 V]
     Buck --> Node
     Node -->|I²C / PWM| PCA[PCA9685]
-    PCA --> Servo[SG90 turnout servo]
+    PCA --> Servo[Turnout<br/>SG90 → PECO SL]
     Node -->|data / clock / latch| Shift[74HC595]
-    Shift --> LEDs[signal and buffer-stop LEDs]
-    Power -->|fused native 12 V| Machine[water tower / suitable machine driver]
+    Shift --> Signal[Signal aspects<br/>RG or RYG LED]
+    Shift --> Buffer[Buffer<br/>Red LED Blink]
+    Node -->|GPIO signal| Relay[relay / driver]
+    Power -->|fused native 12 V| Relay
+    Relay --> Tower[Trackside<br/>Water Tower BLI 7924]
 ```
 
-![MTOS physical device and power connections](docs/images/asset-control-connections.svg)
+[![MTOS stationary-asset electronic circuit diagram](docs/images/asset-control-connections.svg)](docs/images/asset-control-connections.svg)
+
+Select the circuit diagram once to open the full-size vector graphic. It has no
+embedded navigation or magnification controls.
 
 - **Control host:** a headless Linux SBC runs the deterministic services and
   owns the operational databases. The current installation uses a Cubietruck.
@@ -86,10 +92,16 @@ flowchart LR
   commands and decoder feedback. MAIN and PROG outputs feed isolated tracks.
 - **Accessory node:** one node combines an ESP32, one XL4015, one PCA9685 and a
   74HC595 chain. Node configuration maps asset IDs to physical channels.
-- **Turnout output:** PCA9685 provides servo PWM; SG90 movement is serialized so
-  no two servos operate simultaneously.
-- **Signal output:** mutually exclusive LED aspects are shifted through 74HC595
-  outputs with appropriate current-limiting resistors and drivers.
+- **Turnout (SG90 → PECO SL):** PCA9685 provides servo PWM; SG90 movement is
+  serialized so no two servos operate simultaneously. The regulated 5 V output
+  from XL4015 supplies servo `+Vcc` directly rather than through the ESP32.
+- **Signal aspects (RG or RYG LED):** mutually exclusive LED aspects are shifted
+  through 74HC595 outputs with an individual current-limiting resistor per LED.
+- **Buffer (Red LED Blink):** a 74HC595 output drives each resistor-protected red
+  LED; node firmware produces the blink pattern.
+- **Trackside (Water Tower BLI 7924):** an ESP32 control signal drives the relay
+  interface, whose separately fused 12 V input and switched output supply or
+  trigger the water-tower circuit as established during hardware commissioning.
 - **Power:** the layout distributes 12 V. XL4015 supplies the regulated 5 V node
   rail; equipment that needs native 12 V uses a separately fused branch and an
   electrically appropriate relay or driver.

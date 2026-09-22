@@ -97,7 +97,7 @@ form.onsubmit=async e=>{e.preventDefault();$('#error').textContent='';const butt
  acquisition:{...(current?.lifecycle?.acquisition||{}),source:val('source'),price:val('price')===null?null:Number(val('price'))}},
  components:current?.components||[],relations:current?.relations||[]};
  payload.control=field('dcc').checked?{...(current?.control||{}),dcc:true,node_id:null,address:val('address')?Number(val('address')):null,
- decoder:{...(current?.control?.decoder||{}),maker:val('decoder_maker'),model:val('decoder_model')},sound:field('sound').checked}
+ decoder:val('decoder_maker')||val('decoder_model')?{maker:val('decoder_maker'),model:val('decoder_model')}:null,sound:field('sound').checked}
  :{dcc:null,address:null,decoder:null,speed_steps:null,sound:null,node_id:val('node_id'),attributes:current?.control?.attributes||{}};
  if(current)payload.revision=current.revision;
  const result=await api('/api/assets'+(current?'/'+current.id:''),{method:current?'PATCH':'POST',body:JSON.stringify(payload)});
@@ -117,4 +117,4 @@ field('possession').onchange=()=>{field('status').value=val('possession')==='rec
 $('#previous').onclick=()=>{offset=Math.max(0,offset-24);load().catch(error);};$('#next').onclick=()=>{offset+=24;load().catch(error);};
 let timer;for(const s of ['#search','#filter-family','#filter-status'])$(s).addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{offset=0;load().catch(error);},180);});
 document.addEventListener('pointerdown',event=>{if(!event.target.closest('.custom-select'))document.querySelectorAll('.custom-select.open').forEach(item=>item.classList.remove('open'));});
-(async()=>{schema=await api('/api/schema');for(const family of Object.keys(schema.families)){option(field('family'),family);option($('#filter-family'),family);}schema.possession.forEach(p=>option(field('possession'),p));schema.status.forEach(s=>{option(field('status'),s);option($('#filter-status'),s);});schema.locations.forEach(location=>option(field('location'),location));enhanceSelects();await load();await loadConsists();})().catch(error);
+(async()=>{schema=await api('/api/schema');for(const family of Object.keys(schema.families)){option(field('family'),family);option($('#filter-family'),family);}schema.possession.forEach(p=>option(field('possession'),p));schema.status.forEach(s=>{option(field('status'),s);option($('#filter-status'),s);});schema.locations.forEach(location=>option(field('location'),location));schema.decoder_makers.forEach(item=>option(field('decoder_maker'),item.value,item.label));enhanceSelects();await load();await loadConsists();})().catch(error);

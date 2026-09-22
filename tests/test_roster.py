@@ -135,6 +135,9 @@ def test_flask_library_create_update_upload_and_csrf(tmp_path):
     assert client.get("/static/mtos-logo-wireframe.png").status_code == 200
     schema = client.get("/api/schema").json
     assert {"caboose", "tender"} <= set(schema["families"]["freight"])
+    assert {item["value"] for item in schema["decoder_makers"]} >= {"esu", "qsi", "digitrax", "unknown"}
+    assert b'<select name="decoder_maker">' in page.data
+    assert b'<input name="decoder_model" class="decoder-model"' in page.data
     assert b'name="view"' not in page.data and b'name="caption"' not in page.data
     assert b'name="components"' not in page.data
     assert b'name="relations"' not in page.data

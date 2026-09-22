@@ -108,11 +108,13 @@ def create_app(config=None):
 
     @app.get("/api/schema")
     def schema():
+        from .assets.decoders import DECODER_MAKERS
         return jsonify(
             families={family.value: sorted(types) for family, types in TYPES.items()},
             possession=[s.value for s in Possession],
             status=[s.value for s in Status],
             locations=list(LOCATIONS),
+            decoder_makers=[{"value": value, "label": label} for value, label in DECODER_MAKERS.items()],
         )
 
     @app.get("/api/assets")

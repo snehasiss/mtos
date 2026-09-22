@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from enum import StrEnum
 import re
 from typing import Any
+from .decoders import canonical_decoder_maker, canonical_decoder_model
 
 _ASSET_ID = re.compile(r"^[A-Z][0-9]{3}$")
 _CONSIST_ID = re.compile(r"^K[0-9]{3}$")
@@ -143,7 +144,10 @@ class Prototype:
 class Decoder:
     maker: str | None = None
     model: str | None = None
-    serial_number: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "maker", canonical_decoder_maker(self.maker))
+        object.__setattr__(self, "model", canonical_decoder_model(self.model))
 
 
 @dataclass(frozen=True, slots=True)
