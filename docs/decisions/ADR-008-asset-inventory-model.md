@@ -34,7 +34,7 @@ duplicated. SQLite tables will normalize searchable fields and references; JSON
 columns are reserved for genuinely variable attributes. Every database connection
 enables foreign keys and coordinated changes use transactions.
 
-### Asset identity and classification
+### Asset identity and classification (current implementation)
 
 Every asset has:
 
@@ -241,6 +241,20 @@ the proposed classification. Existing passenger records using `balcony` or
 `power_car` would be migrated to `special_car` only after this amendment is
 approved.
 
+The proposed passenger prefix is `P` and the proposed freight prefix is `F`,
+replacing their shared `C` prefix. For example, a new passenger special car
+would receive `P001`, while a new freight gondola would receive `F001`.
+Existing `C` IDs must not simply be renamed in place: they are referenced by
+other records and media filenames. After approval, migration must allocate
+collision-free IDs per family and update all foreign keys, consist memberships,
+relations, media paths, and external references together. Until then the
+current `C` IDs remain authoritative.
+
+For buildings, `chemical_plant` is removed as a top-level type and represented
+as `type: "industry"` with the specific kind in descriptive data. `lumber_mill`
+is added as a building type. The proposed building types are therefore
+`engine_house`, `station`, `warehouse`, `industry`, and `lumber_mill`.
+
 **1. Non-sound DCC diesel locomotive**
 
 ```json
@@ -292,6 +306,7 @@ approved.
 
 ```json
 {
+  "id": "P001",
   "family": "passenger", "type": "special_car",
   "label": "UP Power Car 2066",
   "control": {
@@ -438,6 +453,43 @@ The current `freight.reefer` type means a railcar, not a loose container.
 
 This example does not change L002's database record. It shows why an empty
 decoder object is more accurate than a `no_decoder` maker/model sentinel.
+
+**13. Freight gondola with the proposed freight prefix**
+
+```json
+{
+  "id": "F001", "family": "freight", "type": "gondola",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": null, "node_id": null, "attributes": {}
+  }
+}
+```
+
+**14. Chemical plant classified as an industry**
+
+```json
+{
+  "id": "B001", "family": "building", "type": "industry",
+  "label": "Chemical plant",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": null, "node_id": null, "attributes": {}
+  }
+}
+```
+
+**15. Lumber mill building**
+
+```json
+{
+  "id": "B002", "family": "building", "type": "lumber_mill",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": null, "node_id": null, "attributes": {}
+  }
+}
+```
 
 If a BLI car or sound-equipped container later receives a function decoder and
 rail pickup, the same asset changes to `dcc: true`; its decoder identity and
