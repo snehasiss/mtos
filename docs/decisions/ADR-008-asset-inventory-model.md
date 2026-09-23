@@ -34,7 +34,7 @@ duplicated. SQLite tables will normalize searchable fields and references; JSON
 columns are reserved for genuinely variable attributes. Every database connection
 enables foreign keys and coordinated changes use transactions.
 
-### Asset identity and classification (current implementation)
+### Asset identity and classification (proposed amendment)
 
 Every asset has:
 
@@ -48,8 +48,8 @@ Every asset has:
 
 The add interface allocates the first available ID for the selected family's
 prefix and displays it read-only before saving. Thus a machine proposes `E001`,
-not the locomotive default `L001`. Passenger and freight search the same C-number
-namespace. Allocation is advisory until the transactional insert; a concurrent
+not the locomotive default `L001`. Passenger and freight have separate `P` and
+`F` number spaces. Allocation is advisory until the transactional insert; a concurrent
 collision is rejected and the form must request the next ID again.
 
 `family` is used instead of `class`, because class also means a prototype railway
@@ -57,19 +57,19 @@ class and a software class. The former `desc` field is renamed `type`. Values us
 snake case. `label` is optional; rolling stock is normally identified and searched
 by `prototype.reporting_mark` and `prototype.road_number`.
 
-| Family | Prefix | Version 1 types |
+| Family | Prefix | Version 1 types (proposed) |
 | --- | --- | --- |
 | `loco` | `L` | `diesel`, `turbine`, `steam`, `booster` |
 | `mow` | `M` | `tamper`, `mpv`, `track_cleaner`, `crane`, `snowplow` |
-| `passenger` | `C` | `coach`, `balcony`, `heater_car`, `power_car`, `luggage`, `brakevan` |
-| `freight` | `C` | `wagon`, `tanker`, `gondola`, `intermodal`, `flat_car`, `reefer`, `caboose`, `tender` |
+| `passenger` | `P` | `coach`, `special_car`, `heater_car`, `luggage`, `brakevan` |
+| `freight` | `F` | `wagon`, `tanker`, `gondola`, `intermodal`, `flat_car`, `reefer`, `caboose`, `tender` |
 | `node` | `N` | `control_node` |
 | `turnout` | `T` | `left`, `right`, `wye`, `crossing`, `double_slip` |
 | `signal` | `G` | `ground_2a`, `mainline_3a`, `branchline_2a` |
 | `machine` | `E` | `water_tank`, `turntable` |
-| `building` | `B` | `engine_house`, `chemical_plant`, `station`, `warehouse`, `industry` |
+| `building` | `B` | `engine_house`, `station`, `warehouse`, `industry`, `lumber_mill`, `coal_tower` |
 
-Passenger `power_car` includes what may otherwise be called a generator car.
+Passenger `special_car` includes power, inspection, business, and balcony cars.
 `intermodal` replaces the narrower `well_car`. There is no separate static versus
 operating water-tank type; installed components and control configuration say
 whether a particular `water_tank` is powered.
@@ -78,8 +78,9 @@ The freight `tender` type is for a separately inventoried auxiliary tender. A
 tender permanently integral to one steam locomotive remains a component of that
 locomotive rather than a separate asset.
 
-The prefixes are intentionally not globally mnemonic: passenger and freight both
-use `C`. The full ID remains globally unique.
+The proposed prefixes are mnemonic and the full ID remains globally unique.
+The current implementation still uses shared `C` IDs for passenger and freight;
+those IDs stay authoritative until an approved migration updates their references.
 
 ### Asset record (current implementation)
 
@@ -250,10 +251,10 @@ collision-free IDs per family and update all foreign keys, consist memberships,
 relations, media paths, and external references together. Until then the
 current `C` IDs remain authoritative.
 
-For buildings, `chemical_plant` is removed as a top-level type and represented
-as `type: "industry"` with the specific kind in descriptive data. `lumber_mill`
-is added as a building type. The proposed building types are therefore
-`engine_house`, `station`, `warehouse`, `industry`, and `lumber_mill`.
+For buildings, `chemical_plant` is removed as a type; such a building uses
+`type: "industry"` with no required subtype. `lumber_mill` and `coal_tower`
+are added as building types. The table above is the authoritative proposed
+type list; the current implementation remains unchanged pending approval.
 
 **1. Non-sound DCC diesel locomotive**
 
@@ -484,6 +485,18 @@ decoder object is more accurate than a `no_decoder` maker/model sentinel.
 ```json
 {
   "id": "B002", "family": "building", "type": "lumber_mill",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": null, "node_id": null, "attributes": {}
+  }
+}
+```
+
+**16. Coal tower building**
+
+```json
+{
+  "id": "B003", "family": "building", "type": "coal_tower",
   "control": {
     "dcc": false, "decoder": {}, "sound": false,
     "power": null, "node_id": null, "attributes": {}
