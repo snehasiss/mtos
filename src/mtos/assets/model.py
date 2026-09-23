@@ -38,8 +38,8 @@ class AssetFamily(StrEnum):
 PREFIXES: dict[AssetFamily, str] = {
     AssetFamily.LOCO: "L",
     AssetFamily.MOW: "M",
-    AssetFamily.PASSENGER: "C",
-    AssetFamily.FREIGHT: "C",
+    AssetFamily.PASSENGER: "P",
+    AssetFamily.FREIGHT: "F",
     AssetFamily.NODE: "N",
     AssetFamily.TURNOUT: "T",
     AssetFamily.SIGNAL: "G",
@@ -51,7 +51,7 @@ TYPES: dict[AssetFamily, frozenset[str]] = {
     AssetFamily.LOCO: frozenset({"diesel", "turbine", "steam", "booster"}),
     AssetFamily.MOW: frozenset({"tamper", "mpv", "track_cleaner", "crane", "snowplow"}),
     AssetFamily.PASSENGER: frozenset(
-        {"coach", "balcony", "heater_car", "power_car", "luggage", "brakevan"}
+        {"coach", "special_car", "heater_car", "luggage", "brakevan"}
     ),
     AssetFamily.FREIGHT: frozenset(
         {
@@ -70,7 +70,7 @@ TYPES: dict[AssetFamily, frozenset[str]] = {
     AssetFamily.SIGNAL: frozenset({"ground_2a", "mainline_3a", "branchline_2a"}),
     AssetFamily.MACHINE: frozenset({"water_tank", "turntable"}),
     AssetFamily.BUILDING: frozenset(
-        {"engine_house", "chemical_plant", "station", "warehouse", "industry"}
+        {"engine_house", "station", "warehouse", "industry", "lumber_mill", "coal_tower"}
     ),
 }
 
@@ -144,35 +144,39 @@ class Prototype:
 class Decoder:
     maker: str | None = None
     model: str | None = None
+    address: int | None = None
+    speed_steps: int | None = None
+    smoke: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "maker", canonical_decoder_maker(self.maker))
         object.__setattr__(self, "model", canonical_decoder_model(self.model))
+        if self.address is not None and (type(self.address) is not int or not 1 <= self.address <= 10239):
+            raise ValueError("dcc address must be an integer from 1 through 10239")
+        if self.speed_steps is not None and (type(self.speed_steps) is not int or self.speed_steps not in (14, 28, 128)):
+            raise ValueError("speed_steps must be 14, 28, or 128")
+        if type(self.smoke) is not bool:
+            raise ValueError("smoke must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
 class Control:
-    dcc: bool | None = None
+    dcc: bool = False
     node_id: AssetId | None = None
     decoder: Decoder | None = None
-    address: int | None = None
-    speed_steps: int | None = None
-    sound: bool | None = None
+    sound: bool = False
+    power: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.dcc is True:
-            if self.node_id is not None:
-                raise ValueError("dcc control cannot reference an accessory node")
-            if self.address is not None and self.address < 1:
-                raise ValueError("dcc address must be positive")
-            if self.address is not None and self.address > 10239:
-                raise ValueError("dcc address must not exceed 10239")
-        elif any(
-            value is not None
-            for value in (self.decoder, self.address, self.speed_steps, self.sound)
-        ):
-            raise ValueError("decoder, address, speed_steps and sound require dcc=true")
+        if type(self.dcc) is not bool or type(self.sound) is not bool:
+            raise ValueError("dcc and sound must be booleans")
+        if self.dcc and self.decoder is None:
+            raise ValueError("dcc=true requires a decoder")
+        if not self.dcc and self.decoder is not None:
+            raise ValueError("decoder requires dcc=true")
+        if self.power not in (None, "track_powered", "self_powered", "bus_powered"):
+            raise ValueError("unsupported power source")
         if self.node_id is not None and not self.node_id.value.startswith("N"):
             raise ValueError("control node_id must start with N")
 
@@ -274,8 +278,17 @@ class Asset:
     def to_dict(self) -> dict[str, Any]:
         payload = _compact_json(asdict(self))
         payload["id"] = self.id.value
-        if self.control is not None and self.control.node_id is not None:
-            payload["control"]["node_id"] = self.control.node_id.value
+        control = self.control or Control()
+        payload["control"] = {
+            "dcc": control.dcc,
+            "decoder": ({"maker": control.decoder.maker, "model": control.decoder.model,
+                         "address": control.decoder.address, "speed_steps": control.decoder.speed_steps,
+                         "smoke": control.decoder.smoke} if control.decoder else {}),
+            "sound": control.sound,
+            "power": control.power,
+            "node_id": control.node_id.value if control.node_id else None,
+            "attributes": control.attributes,
+        }
         for relation, serialized in zip(
             self.relations, payload.get("relations", []), strict=True
         ):

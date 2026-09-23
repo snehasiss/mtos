@@ -199,7 +199,7 @@ def create_app(config=None):
             life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
             if life.get("possession") != "received" or control.get("dcc") is not True:
                 continue
-            address = control.get("address")
+            address = (control.get("decoder") or {}).get("address")
             if type(address) is not int:
                 continue
             proto = asset.get("prototype") or {}
@@ -226,7 +226,7 @@ def create_app(config=None):
                     "id": asset["id"], "revision": asset["revision"],
                     "reporting_mark": proto.get("reporting_mark"),
                     "road_number": proto.get("road_number"),
-                    "prototype": proto.get("model"), "address": control.get("address"),
+                    "prototype": proto.get("model"), "address": (control.get("decoder") or {}).get("address"),
                     "status": life.get("status"), "location": life.get("location"),
                 })
         return jsonify(items=items)
@@ -268,7 +268,7 @@ def create_app(config=None):
         if type(address) is not int or not 1 <= address <= 10239:
             raise ValueError("address must be an integer from 1 through 10239")
         return jsonify(roster.save(
-            {"revision": value.get("revision"), "control": {"address": address}},
+            {"revision": value.get("revision"), "control": {"decoder": {"address": address}}},
             asset_id=asset_id,
             verified_address_change=True,
         ))

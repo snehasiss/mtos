@@ -67,7 +67,7 @@ def test_schema_upgrade_preserves_old_values(tmp_path):
     assert (root / "db/before-lifecycle-v3.sqlite3").is_file()
     assert life["acquisition"]["legacy_possession"] == "parked"
     with roster.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert Roster(root).get("L001")["revision"] == 3
 

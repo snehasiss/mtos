@@ -19,7 +19,7 @@ until JOIN/DriveAway has been commissioned against the installed EX-CSB1.
 A primary use case is recovering a locomotive whose decoder address was not
 recorded correctly and which responds to neither address 3 nor its road number.
 Address read must therefore work without knowing or trusting the Asset record's
-current `control.address`.
+current `control.decoder.address`.
 
 Programming on Main (PoM), decoder-definition files, full decoder sheets, bulk
 read/write, automatic decoder identification and JMRI DecoderPro parity are not
@@ -103,7 +103,7 @@ code retained as evidence.
 
 ## Ownership and transaction model
 
-- **Asset** owns `control.address`, lifecycle and decoder-related master data.
+- **Asset** owns `control.decoder.address`, lifecycle and decoder-related master data.
 - **DCC** exclusively owns serial framing, programming requests, output/JOIN state
   and physical readback.
 - **Core** owns the durable programming session, eligibility, lease/fencing,
@@ -119,7 +119,7 @@ operator confirmation
   -> DCC reads current decoder address
   -> DCC writes the new address with <W address>
   -> DCC reads address again
-  -> Core conditionally updates Asset control.address
+  -> Core conditionally updates Asset control.decoder.address
   -> completed / confirmed
 ```
 
@@ -209,7 +209,7 @@ visible until the operator performs another action or explicitly dismisses them.
 Writes require a confirmation dialog containing asset, physical location, CV or
 address, old observed value when known and requested value. Reads do not require
 confirmation. A successful Read Address must never automatically overwrite
-`control.address`; offer a subsequent, explicit reconciliation/write choice.
+`control.decoder.address`; offer a subsequent, explicit reconciliation/write choice.
 Disable controls while a request is outstanding rather than allowing parallel
 touches.
 

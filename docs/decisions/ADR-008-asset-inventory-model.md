@@ -1,6 +1,6 @@
 # ADR-008: Normalized asset-management and roster domain
 
-- **Status:** Accepted; proposed control amendment below awaits review
+- **Status:** Accepted; control and classification amendment implemented (schema v6)
 - **Date:** 2026-09-13
 - **Supersedes:** ADR-003
 
@@ -34,7 +34,7 @@ duplicated. SQLite tables will normalize searchable fields and references; JSON
 columns are reserved for genuinely variable attributes. Every database connection
 enables foreign keys and coordinated changes use transactions.
 
-### Asset identity and classification (proposed amendment)
+### Asset identity and classification
 
 Every asset has:
 
@@ -57,7 +57,7 @@ class and a software class. The former `desc` field is renamed `type`. Values us
 snake case. `label` is optional; rolling stock is normally identified and searched
 by `prototype.reporting_mark` and `prototype.road_number`.
 
-| Family | Prefix | Version 1 types (proposed) |
+| Family | Prefix | Version 1 types |
 | --- | --- | --- |
 | `loco` | `L` | `diesel`, `turbine`, `steam`, `booster` |
 | `mow` | `M` | `tamper`, `mpv`, `track_cleaner`, `crane`, `snowplow` |
@@ -78,11 +78,10 @@ The freight `tender` type is for a separately inventoried auxiliary tender. A
 tender permanently integral to one steam locomotive remains a component of that
 locomotive rather than a separate asset.
 
-The proposed prefixes are mnemonic and the full ID remains globally unique.
-The current implementation still uses shared `C` IDs for passenger and freight;
-those IDs stay authoritative until an approved migration updates their references.
+The prefixes are mnemonic and the full ID remains globally unique. Existing
+shared-`C` records were migrated to their family-specific IDs in schema v6.
 
-### Asset record (current implementation)
+### Asset record
 
 Only `id`, `family`, and `type` are mandatory. An asset can be entered quickly and
 enriched later. A representative rolling-stock record is:
@@ -110,13 +109,12 @@ enriched later. A representative rolling-stock record is:
   },
   "control": {
     "dcc": true,
-    "address": 4202,
-    "speed_steps": 128,
     "decoder": {
-      "maker": "esu",
-      "model": "lokpilot_5"
+      "maker": "esu", "model": "lokpilot_5",
+      "address": 4202, "speed_steps": 128, "smoke": false
     },
-    "sound": true
+    "sound": true, "power": "track_powered",
+    "node_id": null, "attributes": {}
   }
 }
 ```
@@ -125,16 +123,15 @@ The owned scale model is `model`; the represented 1:1 railway subject is
 `prototype`. Searchable values use complete names such as `product_number`,
 `road_number`, and `serial_number`.
 
-`control` is configuration, not live control state. DCC equipment uses `dcc: true`.
-Sound is an independent equipment capability: non-DCC rolling stock may have
-`control: {"dcc": false, "sound": true}`. Decoder, DCC address, and speed steps
-still require `dcc: true`; a DCC function decoder need not imply a traction motor.
+`control` is configuration, not live control state. Every asset carries the same
+outer keys: `dcc`, `decoder`, `sound`, `power`, `node_id`, and `attributes`.
+Decoder identity, address, speed steps, and smoke are inside `decoder` when DCC is
+present; otherwise `decoder` is `{}`. Sound and power are independent of DCC.
 DCC address kind is derived: 1 through 127 is short and 128 or greater is long.
-Supported decoder addresses are 1 through 10239. Asset currently owns the persisted
-`control.address`; ADR-010 distinguishes the coordinated Core/DCC programming
-path from an explicitly warned inventory-only correction in the Asset UI.
-Stationary assets currently omit `dcc` and reference a control node. There is no generic
-node-local `control.address`; physical wiring belongs to components.
+Supported decoder addresses are 1 through 10239. Asset owns the persisted
+`control.decoder.address`; ADR-010 distinguishes coordinated Core/DCC programming
+from an explicitly warned inventory-only correction. Physical wiring belongs to
+components.
 
 ### Components and stationary assets
 
@@ -150,7 +147,8 @@ A turnout stores its actuator and wiring once:
   "family": "turnout",
   "type": "left",
   "label": "West yard entrance",
-  "control": { "node_id": "N001" },
+  "control": { "dcc": false, "decoder": {}, "sound": false,
+               "power": "bus_powered", "node_id": "N001", "attributes": {} },
   "components": [
     {
       "ref": "actuator",
@@ -173,7 +171,8 @@ A three-aspect signal has three LED components:
   "id": "G013",
   "family": "signal",
   "type": "mainline_3a",
-  "control": { "node_id": "N002" },
+  "control": { "dcc": false, "decoder": {}, "sound": false,
+               "power": "bus_powered", "node_id": "N002", "attributes": {} },
   "components": [
     { "ref": "stop", "type": "led", "desc": "red",
       "connection": { "bus": "signal", "channel": 0 },
@@ -196,11 +195,9 @@ aspect is operation state and is not stored in the asset record.
 An SG90 belongs to a turnout. ESP32, PCA9685, 74HC595, and XL4015 devices belong
 to a node. They are not independent assets.
 
-### Proposed amendment: one control shape for every asset (pending review)
+### Uniform control shape for every asset
 
-The following is a **proposed replacement** for the compact `control` JSON above,
-not the implemented schema. No code or data migration is authorized by this
-draft. Every persisted asset and API response would carry the same outer keys:
+Every persisted asset and API response carries the same outer keys:
 
 ```json
 {
@@ -233,28 +230,23 @@ All IDs, addresses, channels, decoder identities, and function mappings below
 are illustrative, not assignments to real equipment. Product classification
 is separate from `control`: `loco.type` must describe the locomotive (such as
 `diesel`, `turbine`, or `steam`), regardless of its decoder or sound equipment.
-For passenger equipment, this amendment proposes one `special_car` type in
-place of the current `balcony` and `power_car` types. Power, inspection,
+For passenger equipment, `special_car` replaces the former `balcony` and
+`power_car` types. Power, inspection,
 business, and balcony cars all use `type: "special_car"`; their label,
 prototype, model, and installed-control properties carry any useful detail.
 There is no separate `power_car`, `inspection_car`, or `business_car` type in
-the proposed classification. Existing passenger records using `balcony` or
-`power_car` would be migrated to `special_car` only after this amendment is
-approved.
+the classification. Existing passenger records using `balcony` or
+`power_car` were migrated to `special_car` in schema v6.
 
-The proposed passenger prefix is `P` and the proposed freight prefix is `F`,
+The passenger prefix is `P` and the freight prefix is `F`,
 replacing their shared `C` prefix. For example, a new passenger special car
 would receive `P001`, while a new freight gondola would receive `F001`.
-Existing `C` IDs must not simply be renamed in place: they are referenced by
-other records and media filenames. After approval, migration must allocate
-collision-free IDs per family and update all foreign keys, consist memberships,
-relations, media paths, and external references together. Until then the
-current `C` IDs remain authoritative.
+Schema v6 migrated existing shared-`C` IDs with collision checks, foreign-key
+updates, and media filename changes. External references to old IDs must be updated.
 
 For buildings, `chemical_plant` is removed as a type; such a building uses
 `type: "industry"` with no required subtype. `lumber_mill` and `coal_tower`
-are added as building types. The table above is the authoritative proposed
-type list; the current implementation remains unchanged pending approval.
+are added as building types. The table above is the implemented type list.
 
 **1. Non-sound DCC diesel locomotive**
 
@@ -452,10 +444,10 @@ The current `freight.reefer` type means a railcar, not a loose container.
 }
 ```
 
-This example does not change L002's database record. It shows why an empty
-decoder object is more accurate than a `no_decoder` maker/model sentinel.
+L002's migrated database record also uses an empty decoder object rather than
+a `no_decoder` maker/model sentinel.
 
-**13. Freight gondola with the proposed freight prefix**
+**13. Freight gondola with the freight prefix**
 
 ```json
 {
@@ -510,12 +502,9 @@ address are then recorded inside `decoder`. Power changes to `track_powered`
 only if its actual source changes. This proposal does not pre-record imagined
 hardware, battery service, switch details, or DCC function mappings.
 
-Implementation after approval requires one coordinated migration of stored
-control JSON, serializer/API responses, form inputs, and Asset/Core/DCC address
-consumers. ADR-010's address-ownership wording must then be updated to point to
-`control.decoder.address`. Existing `control.attributes.smoke` values need
-review before migration because the proposed typed value is `decoder.smoke`.
-No application or database change is part of this draft.
+Schema v6 migrated stored control JSON and `control.attributes.smoke`, and the
+serializer, editor, Asset, Core, and DCC consumers now use `decoder.address`.
+ADR-010 uses the same address path.
 
 Evidence for product examples: [Peco SL-89](https://peco-uk.com/products/turnout-large-radius-left-hand5),
 [BLI Power Car 2066](https://broadway-limited.com/products/9124-union-pacific-power-car-2066-without-roof-antenna-with-sound-ho),

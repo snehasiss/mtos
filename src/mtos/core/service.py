@@ -219,7 +219,7 @@ class CoreService:
             raise ValueError("new_address must be an integer from 1 through 10239")
         asset, lease = self._programming_asset(asset_id, "program_address")
         control = asset.get("control") or {}
-        old_address = control.get("address")
+        old_address = (control.get("decoder") or {}).get("address")
         if type(old_address) is not int or not 1 <= old_address <= 10239:
             raise CoreConflict("Asset requires a valid current DCC address")
         if old_address == new_address:
@@ -364,12 +364,12 @@ class CoreService:
     def _operating_locomotive(self, asset_id, purpose):
         asset = self.asset.get(asset_id)
         life, control = asset.get("lifecycle") or {}, asset.get("control") or {}
-        address = control.get("address")
+        address = (control.get("decoder") or {}).get("address")
         if asset.get("family") != "loco":
             raise CoreConflict("Asset is not a locomotive")
         if life.get("possession") != "received" or life.get("status") != "active":
             raise CoreConflict("Locomotive must be received and active")
-        if control.get("dcc") is not True or type(address) is not int or not 1 <= address <= 10293:
+        if control.get("dcc") is not True or type(address) is not int or not 1 <= address <= 10239:
             raise CoreConflict("Locomotive requires a valid DCC configuration")
         lease = self.asset.acquire_lease(
             asset_id, asset["revision"], self.session_id, self.epoch, purpose

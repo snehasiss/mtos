@@ -205,17 +205,17 @@ def test_family_change_is_rejected_when_media_exists(tmp_path):
     from mtos.roster import Roster
 
     roster = Roster(tmp_path / "data")
-    asset = roster.save({"id": "C001", "family": "freight", "type": "wagon"})
+    asset = roster.save({"id": "F001", "family": "freight", "type": "wagon"})
     source = tmp_path / "source.jpg"
     make_image(source)
-    roster.put_media("C001", 1, source, optimize=True)
+    roster.put_media("F001", 1, source, optimize=True)
     with pytest.raises(ValueError, match="family cannot change"):
         roster.save(
             {"revision": asset["revision"], "family": "passenger", "type": "coach"},
-            asset_id="C001",
+            asset_id="F001",
         )
-    assert roster.get("C001")["family"] == "freight"
-    assert (roster.media / "freight/C001_1.jpg").is_file()
+    assert roster.get("F001")["family"] == "freight"
+    assert (roster.media / "freight/F001_1.jpg").is_file()
 
 
 def test_cli_defaults_to_project_data_from_another_directory(tmp_path, monkeypatch):

@@ -23,11 +23,16 @@ def convert(document):
     kind = {
         "cleaner": "track_cleaner",
         "well_car": "intermodal",
-        "generator_car": "power_car",
+        "generator_car": "special_car",
+        "power_car": "special_car",
+        "balcony": "special_car",
+        "chemical_plant": "industry",
     }.get(kind, kind)
     old_status = model.get("status")
     warnings = []
     asset_id = identity["id"]
+    if asset_id.startswith("C") and family in ("passenger", "freight"):
+        asset_id = ("P" if family == "passenger" else "F") + asset_id[1:]
     if asset_id == "L046" and old_status == "active":
         life = {
             "possession": "received",
@@ -88,26 +93,21 @@ def convert(document):
     if "self_propelled" in document:
         p["attributes"]["self_propelled"] = document["self_propelled"]
     old_control = document.get("control", {})
+    dcc = old_control.get("type") == "dcc"
     control = {
-        "attributes": {
-            k: v
-            for k, v in old_control.items()
-            if k not in ("decoder", "address", "sound")
-        },
-        "dcc": old_control.get("type") == "dcc",
+        "dcc": dcc,
+        "decoder": ({"model": old_control.get("decoder"),
+                     "address": old_control.get("address") or None,
+                     "speed_steps": None,
+                     "smoke": bool(old_control.get("smoke"))} if dcc else {}),
+        "sound": bool(old_control.get("sound")),
+        "power": "track_powered" if old_control.get("type") in ("dcc", "dc") else None,
+        "node_id": None,
+        "attributes": {k: v for k, v in old_control.items()
+                       if k not in ("decoder", "address", "sound", "smoke")},
     }
-    if control["dcc"]:
-        control.update(
-            address=old_control.get("address") or None,
-            sound=bool(old_control.get("sound")),
-            decoder={"model": old_control.get("decoder")},
-        )
-    else:
-        control["attributes"].update(
-            {k: old_control.get(k) for k in ("address", "sound", "decoder")}
-        )
     return {
-        "id": identity["id"],
+        "id": asset_id,
         "family": family,
         "type": kind,
         "prototype": p,

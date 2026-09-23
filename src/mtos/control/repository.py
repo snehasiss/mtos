@@ -43,7 +43,7 @@ class ControlRepository:
                     "reporting_mark": proto.get("reporting_mark"),
                     "road_number": proto.get("road_number"),
                     "prototype": proto.get("model"),
-                    "address": (asset.get("control") or {}).get("address"),
+                    "address": ((asset.get("control") or {}).get("decoder") or {}).get("address"),
                 }
             )
         return items
@@ -62,14 +62,14 @@ class ControlRepository:
         if life["possession"] != "received" or life["status"] != "active":
             return "Locomotive must be received and active"
         control = asset.get("control") or {}
-        address = control.get("address")
-        if control.get("dcc") is not True or type(address) is not int or not 1 <= address <= 10293:
+        address = (control.get("decoder") or {}).get("address")
+        if control.get("dcc") is not True or type(address) is not int or not 1 <= address <= 10239:
             return "Locomotive requires a valid DCC configuration"
         return None
 
     def reserve(self, asset, session_id):
         stamp = now()
-        address = asset["control"]["address"]
+        address = asset["control"]["decoder"]["address"]
         digest = config_hash(asset)
         with self.roster.transaction() as db:
             row = db.execute(

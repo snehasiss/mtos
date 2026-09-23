@@ -19,6 +19,37 @@ def loco(aid="L001", **kwargs):
     return dict(id=aid, family="loco", type="diesel", **kwargs)
 
 
+def test_v6_migrates_shared_ids_media_and_control_without_broken_references(tmp_path):
+    root = tmp_path / "data"
+    roster = Roster(root)
+    with roster.connect() as db:
+        db.execute("INSERT INTO asset(id,family,type,revision,created_at,updated_at) VALUES('C001','freight','gondola',1,'now','now')")
+        db.execute("INSERT INTO asset(id,family,type,revision,created_at,updated_at) VALUES('C002','passenger','power_car',1,'now','now')")
+        db.execute("INSERT INTO control(asset_id,config) VALUES(?,?)", (
+            "C001", json.dumps({"dcc": False, "attributes": {"type": "unpowered", "light": False}})))
+        db.execute("INSERT INTO control(asset_id,config) VALUES(?,?)", (
+            "C002", json.dumps({"dcc": False, "attributes": {"type": "unpowered", "sound": True}})))
+        db.execute("INSERT INTO media(asset_id,sequence,filename,sha256,width,height,size_bytes,created_at) "
+                   "VALUES('C001',1,'C001_1.jpg','hash',10,10,4,'now')")
+        db.execute("INSERT INTO consist(id,revision,updated_at) VALUES('K001',1,'now')")
+        db.execute("INSERT INTO consist_unit(consist_id,position,asset_id) VALUES('K001',0,'C001')")
+        db.execute("PRAGMA user_version=5")
+        db.commit()
+    folder = root / "media" / "freight"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "C001_1.jpg").write_bytes(b"jpeg")
+
+    upgraded = Roster(root)
+    with upgraded.connect() as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert db.execute("SELECT asset_id FROM consist_unit").fetchone()[0] == "F001"
+    assert upgraded.get("F001")["media"]["images"][0]["filename"] == "F001_1.jpg"
+    assert (folder / "F001_1.jpg").is_file()
+    assert upgraded.get("P002")["type"] == "special_car"
+    assert upgraded.get("P002")["control"]["sound"] is True
+
+
 def test_database_roundtrip_search_and_concurrent_edits(roster):
     roster.save(
         loco(
@@ -194,7 +225,7 @@ def test_asset_control_lease_is_atomic_renewable_and_asset_edits_release_it(tmp_
     roster = app.extensions["roster"]
     asset = roster.save(loco(
         prototype={"reporting_mark": "UP", "road_number": "28"},
-        control={"dcc": True, "address": 28},
+        control={"dcc": True, "decoder": {"address": 28}},
         lifecycle={"possession": "received", "status": "active", "location": "test_main_1"},
     ))
     client = app.test_client()
@@ -232,7 +263,7 @@ def test_asset_control_lease_is_atomic_renewable_and_asset_edits_release_it(tmp_
     token = client.get("/api/session").json["csrf"]
     changed = client.patch(
         "/api/assets/L001", headers={"X-CSRF-Token": token},
-        json={"revision": asset["revision"], "control": {"dcc": True, "address": 29}},
+        json={"revision": asset["revision"], "control": {"dcc": True, "decoder": {"address": 29}}},
     )
     assert changed.status_code == 200  # Asset is the authority; a hold never vetoes an edit
     assert changed.json["revision"] == asset["revision"] + 1
@@ -253,7 +284,7 @@ def test_internal_programmed_address_update_is_authenticated_and_revision_checke
     app = create_app({"DATA_ROOT": tmp_path / "data", "TESTING": True, "INTERNAL_TOKEN": "secret"})
     roster = app.extensions["roster"]
     roster.save(loco(
-        control={"dcc": True, "address": 3},
+        control={"dcc": True, "decoder": {"address": 3}},
         lifecycle={"possession": "received", "status": "maintenance", "location": "test_prog_1"},
     ))
     client = app.test_client()
@@ -271,7 +302,7 @@ def test_internal_programmed_address_update_is_authenticated_and_revision_checke
         json={"revision": 1, "address": 28},
     )
     assert updated.status_code == 200
-    assert updated.json["control"]["address"] == 28
+    assert updated.json["control"]["decoder"]["address"] == 28
     assert updated.json["revision"] == 2
     stale = client.patch(
         path,
@@ -416,7 +447,7 @@ def _operating_loco(roster):
     roster.save(
         loco(
             lifecycle={"possession": "received", "status": "active", "location": "main_west_1"},
-            control={"dcc": True, "address": 46},
+            control={"dcc": True, "decoder": {"address": 46}},
         )
     )
     lease = roster.acquire_leases(["L001"], {"L001": 1}, "core-1", 1, "throttle")[0]
@@ -489,6 +520,6 @@ def test_address_change_retires_lease_but_keeps_reservation_for_stop(roster):
     """STOP must keep targeting the address the decoder is actually answering on."""
     _operating_loco(roster)
     roster.save(
-        {"revision": 1, "control": {"dcc": True, "address": 47}}, asset_id="L001"
+        {"revision": 1, "control": {"dcc": True, "decoder": {"address": 47}}}, asset_id="L001"
     )
     assert _holds(roster) == (0, 1)

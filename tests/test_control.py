@@ -79,7 +79,7 @@ def active_loco():
         "family": "loco",
         "type": "diesel",
         "prototype": {"reporting_mark": "UP", "road_number": "28", "model": "8500_gtel"},
-        "control": {"dcc": True, "address": 28},
+        "control": {"dcc": True, "decoder": {"address": 28}},
         "lifecycle": {"possession": "received", "status": "active", "location": "test_main_1"},
     }
 
@@ -192,8 +192,8 @@ def test_service_roster_reservation_and_control_edit_guard(tmp_path):
     result = service.throttle("L001", 8, "forward", service.generation)
     assert result["outcome"] == "confirmed"
     # Asset is the authority: a reservation never vetoes an edit, even of the DCC address.
-    changed = roster.save({"revision": 1, "control": {"address": 29}}, asset_id="L001")
-    assert changed["control"]["address"] == 29
+    changed = roster.save({"revision": 1, "control": {"decoder": {"address": 29}}}, asset_id="L001")
+    assert changed["control"]["decoder"]["address"] == 29
     updated = roster.save({"revision": 2, "label": "Turbine"}, asset_id="L001")
     assert updated["label"] == "Turbine"
     stopped = service.stop("L001")
@@ -215,7 +215,7 @@ def test_control_flask_api_and_ui(tmp_path):
     inactive = active_loco()
     inactive.update(id="L002", revision=None)
     inactive["prototype"] = {**inactive["prototype"], "road_number": "29"}
-    inactive["control"] = {**inactive["control"], "address": 29}
+    inactive["control"] = {**inactive["control"], "decoder": {**inactive["control"]["decoder"], "address": 29}}
     inactive["lifecycle"] = {**inactive["lifecycle"], "status": "stored"}
     inactive.pop("revision")
     roster.save(inactive)
@@ -258,10 +258,10 @@ def test_control_flask_api_and_ui(tmp_path):
     assert client.post("/api/locomotives/L001/throttle", json={"speed": 7, "direction": "forward", "generation": generation}, headers=headers).status_code == 409
 
 
-def test_schema_v5_and_wal(tmp_path):
+def test_schema_v6_and_wal(tmp_path):
     roster = Roster(tmp_path / "data")
     with roster.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
         assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"control_command", "control_reservation"} <= names

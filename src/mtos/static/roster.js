@@ -69,10 +69,10 @@ async function edit(id){
  const values={id:a.id,label:a.label,reporting_mark:p.reporting_mark,road_number:p.road_number,prototype_maker:p.maker,prototype_model:p.model,
  scale:m.scale,model_maker:m.maker,product_number:m.product_number,catalog_name:m.catalog_name,
  possession:l.possession||'planned',status:l.status||'unavailable',location:l.location||'off_track',purchased_on:l.purchased_on,
- source:l.acquisition?.source,price:l.acquisition?.price,address:c.address,decoder_maker:c.decoder?.maker,decoder_model:c.decoder?.model,node_id:c.node_id,notes:a.notes};
+ source:l.acquisition?.source,price:l.acquisition?.price,address:c.decoder?.address,decoder_maker:c.decoder?.maker,decoder_model:c.decoder?.model,speed_steps:c.decoder?.speed_steps,power:c.power,node_id:c.node_id,notes:a.notes};
  for(const [k,v] of Object.entries(values))field(k).value=v??'';
  if(!id)field('id').value=(await api('/api/next-asset-id?family='+encodeURIComponent(field('family').value))).id;
- field('dcc').checked=c.dcc===true;field('sound').checked=c.sound===true;
+ field('dcc').checked=c.dcc===true;field('sound').checked=c.sound===true;field('smoke').checked=c.decoder?.smoke===true;
  $('#editor-title').textContent=id?title(a):'Add asset';$('#library').hidden=true;$('#editor').hidden=false;$('#photos').hidden=!id;
  syncSelects();setEditMode(!id,{adding:!id});gallery();window.scrollTo(0,0);
 }
@@ -87,7 +87,7 @@ form.onsubmit=async e=>{e.preventDefault();$('#error').textContent='';const butt
   const op=await api('/api/assets/'+current.id+'/operation');
   if((op.leased||op.reserved)&&!confirm(current.id+' is under operational control. Changing its status releases it: Core will refuse throttle and function commands, and a moving locomotive keeps its last speed. Stop it first if needed. Continue?'))return;
  }
- if(current&&current.control?.dcc===true&&Number(val('address'))!==current.control.address){
+ if(current&&current.control?.dcc===true&&Number(val('address'))!==current.control.decoder?.address){
   if(!confirm('Changing the roster DCC address does not program the physical decoder. Use MTOS Programming for a coordinated decoder address change. Save this inventory-only change anyway?'))return;
  }
  const payload={id:current?.id||val('id'),family:val('family'),type:val('type'),label:val('label'),notes:val('notes'),
@@ -96,9 +96,10 @@ form.onsubmit=async e=>{e.preventDefault();$('#error').textContent='';const butt
  lifecycle:{...(current?.lifecycle||{}),possession:val('possession'),status:val('status'),location:val('location'),purchased_on:val('purchased_on'),
  acquisition:{...(current?.lifecycle?.acquisition||{}),source:val('source'),price:val('price')===null?null:Number(val('price'))}},
  components:current?.components||[],relations:current?.relations||[]};
- payload.control=field('dcc').checked?{...(current?.control||{}),dcc:true,node_id:null,address:val('address')?Number(val('address')):null,
- decoder:val('decoder_maker')||val('decoder_model')?{maker:val('decoder_maker'),model:val('decoder_model')}:null,sound:field('sound').checked}
- :{dcc:null,address:null,decoder:null,speed_steps:null,sound:null,node_id:val('node_id'),attributes:current?.control?.attributes||{}};
+ payload.control={dcc:field('dcc').checked,
+ decoder:field('dcc').checked?{maker:val('decoder_maker'),model:val('decoder_model'),address:val('address')?Number(val('address')):null,
+ speed_steps:val('speed_steps')?Number(val('speed_steps')):null,smoke:field('smoke').checked}:{},
+ sound:field('sound').checked,power:val('power'),node_id:val('node_id'),attributes:current?.control?.attributes||{}};
  if(current)payload.revision=current.revision;
  const result=await api('/api/assets'+(current?'/'+current.id:''),{method:current?'PATCH':'POST',body:JSON.stringify(payload)});
  await edit(result.id);$('#detail-status').textContent='Saved · view mode restored.';

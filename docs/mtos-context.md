@@ -100,16 +100,16 @@ identity belongs in `prototype.reporting_mark` and `prototype.road_number`.
 | --- | --- | --- |
 | loco | L | diesel, turbine, steam, booster |
 | mow | M | tamper, mpv, track_cleaner, crane, snowplow |
-| passenger | C | coach, balcony, heater_car, power_car, luggage, brakevan |
-| freight | C | wagon, tanker, gondola, intermodal, flat_car, reefer, caboose, tender |
+| passenger | P | coach, special_car, heater_car, luggage, brakevan |
+| freight | F | wagon, tanker, gondola, intermodal, flat_car, reefer, caboose, tender |
 | node | N | control_node |
 | turnout | T | left, right, wye, crossing, double_slip |
 | signal | G | ground_2a, mainline_3a, branchline_2a |
 | machine | E | water_tank, turntable |
-| building | B | engine_house, chemical_plant, station, warehouse, industry |
+| building | B | engine_house, station, warehouse, industry, lumber_mill, coal_tower |
 
-Passenger/freight IDs share the globally unique C namespace. G avoids confusion
-between S and 5; M is Maintenance of Way. `power_car` includes generator cars;
+Passenger and freight have separate P and F prefixes. G avoids confusion
+between S and 5; M is Maintenance of Way. `special_car` includes power cars;
 `intermodal` replaces well_car; `water_tank` does not encode operating/static.
 Rolling stock includes self-propelled, powered-but-not-self-propelled and
 unpowered equipment, but these are not extra mandatory classification layers.
@@ -122,12 +122,11 @@ unpowered equipment, but these are not extra mandatory classification layers.
   `released_on`.
 - `prototype` (real-world 1:1 subject): `maker`, `model`, `reporting_mark`,
   `road_number`, variable `attributes` such as `cab` and `unit`.
-- `control`: `dcc`, `node_id`, `address`, `speed_steps`, `sound`,
-  `decoder` (`maker`, `model`, `serial_number`), variable `attributes`.
-  Decoder/address/speed_steps/sound require `dcc: true`; DCC configuration cannot
-  simultaneously reference an accessory node. There is no `address_type` field.
-  ADR-008 describes deriving short/long at 127/128, not the earlier suggested 128
-  short cutoff; actual protocol behavior remains future control work.
+- `control`: uniform `dcc`, `decoder`, `sound`, `power`, `node_id`, and
+  `attributes`. DCC decoder identity, address, speed steps, and smoke live in
+  `decoder`; without DCC it is `{}`. Sound can be present without DCC. Power is
+  `track_powered`, `self_powered`, `bus_powered`, or null. There is no
+  `address_type` field; 1–127 is short and 128–10239 is long.
 - `components`: ordered integral parts identified by parent-local `ref`, with
   `type`, `desc`, `qty`, optional `connection` (`bus`, `channel`), `values`, `spec`,
   `maker`, `model`, `serial_number`, `installed_on`, `removed_on`.
@@ -1329,7 +1328,7 @@ denied); the owner must run `tools/mtos_hmi restart` once to load the fix.
 ### 2026-09-20: Asset ownership and decoder-address programming checkpoint
 
 Asset is authoritative for asset master data, including `lifecycle.status` and
-`control.address`. An active Core lease or reservation does not veto a deliberate
+`control.decoder.address`. An active Core lease or reservation does not veto a deliberate
 Asset edit. When an Asset edit changes the operating view, Asset invalidates the
 affected lease/projection so Core must reacquire and reconcile current data.
 This preserves the owner's ability to place a locomotive into maintenance or
@@ -1346,7 +1345,7 @@ and clear CV29 bit 5; long addresses program CV17/CV18 and set CV29 bit 5 while
 preserving the remaining CV29 bits. Every affected CV is read back. Supported
 addresses are 1 through 10239.
 
-Asset still permits a direct inventory-only `control.address` correction because
+Asset still permits a direct inventory-only `control.decoder.address` correction because
 it owns that field. The browser warns that this does not program or verify the
 physical decoder. This escape hatch is intentional for imports, recovery and
 manual correction; it can create a roster/decoder mismatch until reconciled.
@@ -1394,7 +1393,7 @@ the guarded physical-programming and conditional-Asset-update workflow; a read
 result is never silently persisted.
 
 There is no routine third Save button. Write Address includes physical write,
-decoder readback and the conditional Asset `control.address` update as one
+decoder readback and the conditional Asset `control.decoder.address` update as one
 coordinated operation. A verified-hardware/failed-Asset outcome becomes uncertain;
 a later recovery increment must expose a contextual Reconcile action. Persistent per-section message areas
 remain visible but carry no redundant “STATUS” caption.
@@ -1404,7 +1403,7 @@ remain visible but carry no redundant “STATUS” caption.
 The hardware-independent CV programming path is implemented across Asset, Core,
 DCC and HMI. Asset exposes only received DCC locomotives/self-propelled MOW assets
 in maintenance at `test_prog_1`. Core enforces that eligibility for writes,
-journals each operation, and updates Asset `control.address` only after DCC
+journals each operation, and updates Asset `control.decoder.address` only after DCC
 confirms a dedicated address write and an independent address readback. Read
 Address can run without selecting an Asset so an unknown decoder can be
 identified without changing inventory.

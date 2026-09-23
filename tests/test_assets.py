@@ -40,7 +40,7 @@ def received(
 
 
 def test_minimal_asset_has_normalized_classification() -> None:
-    asset = Asset(AssetId("C001"), AssetFamily.FREIGHT, "gondola")
+    asset = Asset(AssetId("F001"), AssetFamily.FREIGHT, "gondola")
     library = AssetLibrary([asset])
     assert library.list(family=AssetFamily.FREIGHT) == (asset,)
     assert asset.to_dict()["family"] == "freight"
@@ -55,16 +55,16 @@ def test_v1_signal_types(signal_type: str) -> None:
 
 
 def test_updated_roster_vocabulary() -> None:
-    Asset(AssetId("C001"), AssetFamily.PASSENGER, "power_car")
-    Asset(AssetId("C002"), AssetFamily.PASSENGER, "luggage")
-    Asset(AssetId("C003"), AssetFamily.PASSENGER, "brakevan")
-    Asset(AssetId("C004"), AssetFamily.FREIGHT, "intermodal")
-    Asset(AssetId("C005"), AssetFamily.FREIGHT, "reefer")
-    Asset(AssetId("C006"), AssetFamily.FREIGHT, "caboose")
-    Asset(AssetId("C007"), AssetFamily.FREIGHT, "tender")
+    Asset(AssetId("P001"), AssetFamily.PASSENGER, "special_car")
+    Asset(AssetId("P002"), AssetFamily.PASSENGER, "luggage")
+    Asset(AssetId("P003"), AssetFamily.PASSENGER, "brakevan")
+    Asset(AssetId("F004"), AssetFamily.FREIGHT, "intermodal")
+    Asset(AssetId("F005"), AssetFamily.FREIGHT, "reefer")
+    Asset(AssetId("F006"), AssetFamily.FREIGHT, "caboose")
+    Asset(AssetId("F007"), AssetFamily.FREIGHT, "tender")
     Asset(AssetId("E001"), AssetFamily.MACHINE, "water_tank")
     with pytest.raises(ValueError, match="unsupported"):
-        Asset(AssetId("C008"), AssetFamily.PASSENGER, "generator_car")
+        Asset(AssetId("P008"), AssetFamily.PASSENGER, "generator_car")
 
 
 def test_grouped_asset_payload_is_compact_and_searchable() -> None:
@@ -82,17 +82,15 @@ def test_grouped_asset_payload_is_compact_and_searchable() -> None:
         ),
         control=Control(
             dcc=True,
-            decoder=Decoder(maker="esu", model="loksound_5"),
-            address=4202,
-            speed_steps=128,
+            decoder=Decoder(maker="esu", model="loksound_5", address=4202, speed_steps=128),
         ),
     )
     payload = asset.to_dict()
     assert payload["prototype"]["reporting_mark"] == "SAL"
     assert payload["prototype"]["road_number"] == "4202"
     assert payload["model"]["product_number"] == "1234"
-    assert payload["control"]["address"] == 4202
-    assert "node_id" not in payload["control"]
+    assert payload["control"]["decoder"]["address"] == 4202
+    assert payload["control"]["node_id"] is None
     assert "lifecycle" not in payload
 
 
@@ -101,6 +99,24 @@ def test_decoder_maker_is_controlled_and_model_is_canonical_text() -> None:
     assert Decoder(maker="unknown", model=None).model is None
     with pytest.raises(ValueError, match="unsupported decoder maker"):
         Decoder(maker="made_up", model="new_model")
+
+
+def test_uniform_control_allows_sound_without_dcc_and_function_only_decoder() -> None:
+    power_car = Asset(
+        AssetId("P001"), AssetFamily.PASSENGER, "special_car",
+        control=Control(sound=True, power="track_powered"),
+    )
+    assert power_car.to_dict()["control"] == {
+        "dcc": False, "decoder": {}, "sound": True, "power": "track_powered",
+        "node_id": None, "attributes": {},
+    }
+    cleaner = Asset(
+        AssetId("M001"), AssetFamily.MOW, "track_cleaner",
+        control=Control(dcc=True, decoder=Decoder(address=45), power="track_powered"),
+    )
+    assert cleaner.to_dict()["control"]["decoder"]["speed_steps"] is None
+    with pytest.raises(ValueError, match="decoder requires dcc"):
+        Control(decoder=Decoder(address=3))
 
 
 def test_lifecycle_is_a_separate_record_keyed_by_asset_id() -> None:
@@ -140,9 +156,9 @@ def test_active_rolling_stock_requires_layout_location() -> None:
 
 
 def test_retirement_is_status_not_possession() -> None:
-    asset = Asset(AssetId("C001"), AssetFamily.FREIGHT, "reefer")
-    library = AssetLibrary([asset], [received("C001")])
-    retired = library.retire("C001")
+    asset = Asset(AssetId("F001"), AssetFamily.FREIGHT, "reefer")
+    library = AssetLibrary([asset], [received("F001")])
+    retired = library.retire("F001")
     assert retired.possession is Possession.RECEIVED
     assert retired.status is Status.RETIRED
     assert library.list() == ()
@@ -167,7 +183,7 @@ def test_turnout_wiring_is_held_once_in_components() -> None:
         ),
     )
     payload = turnout.to_dict()
-    assert payload["control"] == {"node_id": "N001"}
+    assert payload["control"]["node_id"] == "N001"
     assert payload["components"][0]["connection"] == {"bus": "servo", "channel": 3}
     assert "outputs" not in payload["control"]
 
@@ -250,8 +266,8 @@ def test_consist_rejects_stationary_assets_and_duplicates() -> None:
 
 
 def test_media_can_be_added_and_primary_image_replaced() -> None:
-    asset = Asset(AssetId("C001"), AssetFamily.FREIGHT, "gondola")
+    asset = Asset(AssetId("F001"), AssetFamily.FREIGHT, "gondola")
     library = AssetLibrary([asset])
-    library.add_media("C001", Media(1, "C001_1.jpg", primary=True))
-    updated = library.add_media("C001", Media(2, "C001_2.jpg", primary=True))
+    library.add_media("F001", Media(1, "F001_1.jpg", primary=True))
+    updated = library.add_media("F001", Media(2, "F001_2.jpg", primary=True))
     assert [item.primary for item in updated.media] == [False, True]

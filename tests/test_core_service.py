@@ -9,7 +9,7 @@ class FakeAsset:
         self.asset = {
             "id": "L001", "revision": 7, "family": "loco", "type": "diesel",
             "lifecycle": {"possession": "received", "status": "active", "location": "test_main_1"},
-            "control": {"dcc": True, "address": 28},
+            "control": {"dcc": True, "decoder": {"address": 28}},
         }
         self.fence = 0
 
@@ -34,7 +34,7 @@ class FakeAsset:
 
     def update_programmed_address(self, asset_id, revision, address):
         assert asset_id == "L001" and revision == self.asset["revision"]
-        self.asset["control"]["address"] = address
+        self.asset["control"]["decoder"]["address"] = address
         self.asset["revision"] += 1
         return self.asset
 
@@ -185,7 +185,7 @@ def test_core_programs_then_commits_decoder_address(tmp_path):
     result = service.program_address("L001", 29, "program-1")
     assert result["outcome"] == "confirmed"
     assert result["control_address"] == 29
-    assert service.asset.asset["control"]["address"] == 29
+    assert service.asset.asset["control"]["decoder"]["address"] == 29
     assert service.repository.reservation("L001") is None
     with service.repository.connect() as database:
         row = database.execute(

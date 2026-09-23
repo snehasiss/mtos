@@ -107,7 +107,7 @@ class ControlService:
             address = row["address"]
         else:
             asset = self.repository.roster.get(asset_id)
-            address = (asset.get("control") or {}).get("address")
+            address = ((asset.get("control") or {}).get("decoder") or {}).get("address")
         if type(address) is not int:
             raise Conflict("No DCC address is available for stop")
         with self._lock:

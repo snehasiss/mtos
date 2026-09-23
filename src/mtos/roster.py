@@ -111,19 +111,19 @@ def validate(payload):
             raise ValueError(f"{key} must be an array of objects")
     identity = AssetId(payload["id"])
     control = dict(payload.get("control") or {})
+    if set(control) - {"dcc", "decoder", "sound", "power", "node_id", "attributes"}:
+        raise ValueError("Unknown control fields")
     if control.get("node_id"):
         control["node_id"] = AssetId(control["node_id"])
-    if control.get("decoder"):
-        decoder = control["decoder"]
-        if not isinstance(decoder, dict) or set(decoder) - {"maker", "model", "serial_number"}:
-            raise ValueError("decoder must contain a model")
-        control["decoder"] = Decoder(maker=decoder.get("maker"), model=decoder.get("model"))
-    for key in ("address", "speed_steps"):
-        if control.get(key) is not None and type(control[key]) is not int:
-            raise ValueError(f"{key} must be an integer")
+    decoder = control.get("decoder", {})
+    if not isinstance(decoder, dict) or set(decoder) - {"maker", "model", "address", "speed_steps", "smoke"}:
+        raise ValueError("Invalid decoder fields")
+    control["decoder"] = Decoder(**decoder) if decoder else None
     for key in ("dcc", "sound"):
-        if control.get(key) is not None and type(control[key]) is not bool:
+        if key in control and type(control[key]) is not bool:
             raise ValueError(f"{key} must be a boolean")
+    if "attributes" in control and not isinstance(control["attributes"], dict):
+        raise ValueError("control attributes must be an object")
     components = []
     for raw in payload.get("components") or []:
         item = dict(raw)
@@ -145,7 +145,7 @@ def validate(payload):
         prototype=Prototype(**payload["prototype"])
         if payload.get("prototype")
         else None,
-        control=Control(**control) if control else None,
+        control=Control(**control),
         components=tuple(components),
         relations=tuple(
             Relation(r["rel"], AssetId(r["asset_id"]), r["reason"])
@@ -236,7 +236,16 @@ class Roster:
             sql = (Path(__file__).parent / "migrations/005_asset_leases.sql").read_text()
             db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
             version = 5
-        if version != 5:
+        if version == 5:
+            safety = self.database.parent / "before-control-v6.sqlite3"
+            if not safety.exists():
+                with sqlite3.connect(safety) as backup:
+                    db.backup(backup)
+            from .migrations.control_v6 import upgrade
+
+            upgrade(db, self.media)
+            version = 6
+        if version != 6:
             raise ValueError(f"Unsupported database schema: {version}")
         db.execute("PRAGMA journal_mode=WAL")
         self._migrate_media_layout(db)
@@ -478,8 +487,8 @@ class Roster:
                     raise Conflict("Asset ID already exists")
             item = validate(merged)
             aid = item["id"]
-            old_address = (old.get("control") or {}).get("address") if asset_id else None
-            new_address = (item.get("control") or {}).get("address")
+            old_address = ((old.get("control") or {}).get("decoder") or {}).get("address") if asset_id else None
+            new_address = ((item.get("control") or {}).get("decoder") or {}).get("address")
             if verified_address_change and (
                 not asset_id or old_address == new_address
             ):

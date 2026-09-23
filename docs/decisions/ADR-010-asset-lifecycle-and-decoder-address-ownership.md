@@ -34,7 +34,7 @@ database edit cannot stop already moving hardware.
 
 ### Decoder address
 
-`control.address` remains Asset-owned master data. There are two explicitly
+`control.decoder.address` remains Asset-owned master data. There are two explicitly
 different write paths:
 
 1. **Coordinated programming (normal path).** Core validates a received,
@@ -44,7 +44,7 @@ different write paths:
    the affected CVs back. Only a confirmed readback allows Core to conditionally
    update Asset using the expected revision.
 2. **Inventory-only override.** `mtos_asset` may directly edit
-   `control.address`, but the UI must warn that this does not program or verify
+   `control.decoder.address`, but the UI must warn that this does not program or verify
    the decoder. This path exists for imports, corrections and externally
    programmed decoders. It never claims physical synchronization.
 
@@ -70,7 +70,7 @@ blindly retry because the decoder may already use the new address.
 
 ## Service ownership
 
-- `mtos_asset`: lifecycle and `control.address` persistence, revision checks,
+- `mtos_asset`: lifecycle and `control.decoder.address` persistence, revision checks,
   direct-edit warning and operating-view invalidation.
 - `mtos_core`: eligibility policy, lease, durable workflow, old/new address and
   outcome, and conditional Asset update.

@@ -153,12 +153,12 @@ date is `purchased_on`.
 Asset owns lifecycle status and permits those edits even when operational holds
 exist; changing the operating view invalidates those holds and forces Core to
 revalidate. The UI warns when removing an active controlled asset because the
-save cannot stop already moving hardware. A direct `control.address` edit is also
+save cannot stop already moving hardware. A direct `control.decoder.address` edit is also
 allowed with a warning and does not program the decoder. The normal physical
 address-change path is the Core/DCC programming workflow in ADR-010.
 
 `GET /api/next-asset-id?family=machine` returns the first available ID in that
-family prefix, such as `E001`. Passenger and freight share the C namespace. The
+family prefix, such as `E001`. Passenger and freight use separate P and F namespaces. The
 add form refreshes this value when family changes; uniqueness is still checked
 when saving in case two clients request the same ID concurrently.
 
