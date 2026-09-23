@@ -232,6 +232,14 @@ All IDs, addresses, channels, decoder identities, and function mappings below
 are illustrative, not assignments to real equipment. Product classification
 is separate from `control`: `loco.type` must describe the locomotive (such as
 `diesel`, `turbine`, or `steam`), regardless of its decoder or sound equipment.
+For passenger equipment, this amendment proposes one `special_car` type in
+place of the current `balcony` and `power_car` types. Power, inspection,
+business, and balcony cars all use `type: "special_car"`; their label,
+prototype, model, and installed-control properties carry any useful detail.
+There is no separate `power_car`, `inspection_car`, or `business_car` type in
+the proposed classification. Existing passenger records using `balcony` or
+`power_car` would be migrated to `special_car` only after this amendment is
+approved.
 
 **1. Non-sound DCC diesel locomotive**
 
@@ -284,7 +292,8 @@ is separate from `control`: `loco.type` must describe the locomotive (such as
 
 ```json
 {
-  "family": "passenger", "type": "power_car",
+  "family": "passenger", "type": "special_car",
+  "label": "UP Power Car 2066",
   "control": {
     "dcc": false, "decoder": {}, "sound": true,
     "power": "track_powered", "node_id": null, "attributes": {}
@@ -299,7 +308,8 @@ switches need no extra control attributes for this inventory decision.
 
 ```json
 {
-  "family": "passenger", "type": "inspection_car",
+  "family": "passenger", "type": "special_car",
+  "label": "Track inspection car",
   "control": {
     "dcc": false, "decoder": {}, "sound": false,
     "power": "track_powered", "node_id": null,
@@ -387,7 +397,8 @@ describes the tower's capability; it does not create a second command.
 
 ```json
 {
-  "family": "passenger", "type": "business_car",
+  "family": "passenger", "type": "special_car",
+  "label": "Business car",
   "control": {
     "dcc": false, "decoder": {}, "sound": false,
     "power": "track_powered", "node_id": null,
@@ -410,7 +421,6 @@ describes the tower's capability; it does not create a second command.
 
 `container` is an illustrative **new family**, not a currently accepted type;
 its ID prefix and classification require a separate decision before entry.
-Likewise, `inspection_car` and `business_car` would be new passenger types.
 The current `freight.reefer` type means a railcar, not a loose container.
 
 **12. DC locomotive without a decoder (the L002 case)**
