@@ -1,6 +1,6 @@
 # ADR-008: Normalized asset-management and roster domain
 
-- **Status:** Accepted
+- **Status:** Accepted; proposed control amendment below awaits review
 - **Date:** 2026-09-13
 - **Supersedes:** ADR-003
 
@@ -81,7 +81,7 @@ locomotive rather than a separate asset.
 The prefixes are intentionally not globally mnemonic: passenger and freight both
 use `C`. The full ID remains globally unique.
 
-### Asset record
+### Asset record (current implementation)
 
 Only `id`, `family`, and `type` are mandatory. An asset can be entered quickly and
 enriched later. A representative rolling-stock record is:
@@ -125,11 +125,14 @@ The owned scale model is `model`; the represented 1:1 railway subject is
 `road_number`, and `serial_number`.
 
 `control` is configuration, not live control state. DCC equipment uses `dcc: true`.
+Sound is an independent equipment capability: non-DCC rolling stock may have
+`control: {"dcc": false, "sound": true}`. Decoder, DCC address, and speed steps
+still require `dcc: true`; a DCC function decoder need not imply a traction motor.
 DCC address kind is derived: 1 through 127 is short and 128 or greater is long.
-Supported decoder addresses are 1 through 10239. Asset owns the persisted
+Supported decoder addresses are 1 through 10239. Asset currently owns the persisted
 `control.address`; ADR-010 distinguishes the coordinated Core/DCC programming
 path from an explicitly warned inventory-only correction in the Asset UI.
-Stationary assets omit `dcc` and reference a control node. There is no generic
+Stationary assets currently omit `dcc` and reference a control node. There is no generic
 node-local `control.address`; physical wiring belongs to components.
 
 ### Components and stationary assets
@@ -191,6 +194,259 @@ aspect is operation state and is not stored in the asset record.
 
 An SG90 belongs to a turnout. ESP32, PCA9685, 74HC595, and XL4015 devices belong
 to a node. They are not independent assets.
+
+### Proposed amendment: one control shape for every asset (pending review)
+
+The following is a **proposed replacement** for the compact `control` JSON above,
+not the implemented schema. No code or data migration is authorized by this
+draft. Every persisted asset and API response would carry the same outer keys:
+
+```json
+{
+  "control": {
+    "dcc": false,
+    "decoder": {},
+    "sound": false,
+    "power": null,
+    "node_id": null,
+    "attributes": {}
+  }
+}
+```
+
+`dcc` says whether a DCC decoder receives commands; it does **not** say whether
+the asset propels itself. `decoder` is `{}` when no decoder is installed. With
+DCC, its fields are `maker`, `model`, `address`, `speed_steps`, and `smoke`.
+Decoder address and speed-step mode move from `control` into `decoder`.
+`speed_steps` may be `null` for a function-only decoder with no motor. Smoke is
+recorded only inside `decoder`, reflecting the equipment covered by this plan;
+there is no top-level `control.smoke`. `sound` remains outside `decoder` because
+sound can exist without DCC. The three non-null `power` values are
+`track_powered` (rail pickup), `self_powered` (onboard battery), and
+`bus_powered` (layout accessory bus/control-node supply). `null` means the
+source is not known. Neither track power nor sound implies DCC control.
+`node_id` identifies the accessory control node, where applicable. `attributes`
+remains the existing extension map; for example, `light: true` records lighting.
+
+All IDs, addresses, channels, decoder identities, and function mappings below
+are illustrative, not assignments to real equipment. Product classification
+is separate from `control`: `loco.type` must describe the locomotive (such as
+`diesel`, `turbine`, or `steam`), regardless of its decoder or sound equipment.
+
+**1. Non-sound DCC diesel locomotive**
+
+```json
+{
+  "family": "loco", "type": "diesel",
+  "control": {
+    "dcc": true,
+    "decoder": { "maker": "digitrax", "model": "dh126", "address": 3,
+                 "speed_steps": 128, "smoke": false },
+    "sound": false, "power": "track_powered", "node_id": null,
+    "attributes": {}
+  }
+}
+```
+
+**2. Sound-equipped DCC turbine locomotive**
+
+```json
+{
+  "family": "loco", "type": "turbine",
+  "control": {
+    "dcc": true,
+    "decoder": { "maker": "esu", "model": "loksound_5", "address": 3,
+                 "speed_steps": 128, "smoke": false },
+    "sound": true, "power": "track_powered", "node_id": null,
+    "attributes": {}
+  }
+}
+```
+
+**3. Sound- and smoke-equipped DCC 4-6-6-4 steam locomotive**
+
+```json
+{
+  "family": "loco", "type": "steam",
+  "prototype": { "model": "challenger",
+                 "attributes": { "wheel_arrangement": "4-6-6-4" } },
+  "control": {
+    "dcc": true,
+    "decoder": { "maker": "broadway_limited", "model": "paragon4", "address": 3800,
+                 "speed_steps": 128, "smoke": true },
+    "sound": true, "power": "track_powered", "node_id": null,
+    "attributes": {}
+  }
+}
+```
+
+**4. BLI power car with sound, track pickup, and onboard switches**
+
+```json
+{
+  "family": "passenger", "type": "power_car",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": true,
+    "power": "track_powered", "node_id": null, "attributes": {}
+  }
+}
+```
+
+This is **not** battery-powered and has no factory DCC decoder. Its local
+switches need no extra control attributes for this inventory decision.
+
+**5. BLI inspection car with lights, but no sound or DCC**
+
+```json
+{
+  "family": "passenger", "type": "inspection_car",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": "track_powered", "node_id": null,
+    "attributes": { "light": true }
+  }
+}
+```
+
+**6. Non-self-propelled track cleaner controlled by a DCC function**
+
+```json
+{
+  "family": "mow", "type": "track_cleaner",
+  "control": {
+    "dcc": true,
+    "decoder": { "maker": null, "model": null, "address": null,
+                 "speed_steps": null, "smoke": false },
+    "sound": false, "power": "track_powered", "node_id": null,
+    "attributes": {}
+  }
+}
+```
+
+The decoder and DCC address can be recorded when identified. No traction motor
+or speed-step setting is implied. The exact cleaning function mapping is
+outside this basic inventory shape.
+
+**7. Peco SL-89 large-radius left-hand turnout**
+
+```json
+{
+  "family": "turnout", "type": "left",
+  "model": { "maker": "peco", "product_number": "SL-89" },
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": "bus_powered", "node_id": "N001", "attributes": {}
+  },
+  "components": [
+    { "ref": "actuator", "type": "servo", "desc": "turnout_servo",
+      "connection": { "bus": "servo", "channel": 3 } }
+  ]
+}
+```
+
+The servo and wiring remain components, as in the accepted model.
+
+**8. Two-aspect ground signal**
+
+```json
+{
+  "family": "signal", "type": "ground_2a",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": "bus_powered", "node_id": "N002", "attributes": {}
+  },
+  "components": [
+    { "ref": "stop", "type": "led", "desc": "red",
+      "connection": { "bus": "signal", "channel": 0 } },
+    { "ref": "go", "type": "led", "desc": "green",
+      "connection": { "bus": "signal", "channel": 1 } }
+  ]
+}
+```
+
+**9. Stationary water tower: one node actuation triggers barrel movement and sound**
+
+```json
+{
+  "family": "machine", "type": "water_tank",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": true,
+    "power": "bus_powered", "node_id": "N003", "attributes": {}
+  },
+  "components": [
+    { "ref": "actuator", "type": "actuator", "desc": "barrel_and_sound",
+      "connection": { "bus": "machine", "channel": 0 } }
+  ]
+}
+```
+
+One component connection represents the single actuation signal. `sound: true`
+describes the tower's capability; it does not create a second command.
+
+**10. BLI business car with track-powered, locally switched lights**
+
+```json
+{
+  "family": "passenger", "type": "business_car",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": "track_powered", "node_id": null,
+    "attributes": { "light": true }
+  }
+}
+```
+
+**11. Sound-equipped ScaleTrains reefer container, powered by a 9-volt battery**
+
+```json
+{
+  "family": "container", "type": "reefer",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": true,
+    "power": "self_powered", "node_id": null, "attributes": {}
+  }
+}
+```
+
+`container` is an illustrative **new family**, not a currently accepted type;
+its ID prefix and classification require a separate decision before entry.
+Likewise, `inspection_car` and `business_car` would be new passenger types.
+The current `freight.reefer` type means a railcar, not a loose container.
+
+**12. DC locomotive without a decoder (the L002 case)**
+
+```json
+{
+  "family": "loco", "type": "diesel",
+  "control": {
+    "dcc": false, "decoder": {}, "sound": false,
+    "power": "track_powered", "node_id": null,
+    "attributes": { "light": true }
+  }
+}
+```
+
+This example does not change L002's database record. It shows why an empty
+decoder object is more accurate than a `no_decoder` maker/model sentinel.
+
+If a BLI car or sound-equipped container later receives a function decoder and
+rail pickup, the same asset changes to `dcc: true`; its decoder identity and
+address are then recorded inside `decoder`. Power changes to `track_powered`
+only if its actual source changes. This proposal does not pre-record imagined
+hardware, battery service, switch details, or DCC function mappings.
+
+Implementation after approval requires one coordinated migration of stored
+control JSON, serializer/API responses, form inputs, and Asset/Core/DCC address
+consumers. ADR-010's address-ownership wording must then be updated to point to
+`control.decoder.address`. Existing `control.attributes.smoke` values need
+review before migration because the proposed typed value is `decoder.smoke`.
+No application or database change is part of this draft.
+
+Evidence for product examples: [Peco SL-89](https://peco-uk.com/products/turnout-large-radius-left-hand5),
+[BLI Power Car 2066](https://broadway-limited.com/products/9124-union-pacific-power-car-2066-without-roof-antenna-with-sound-ho),
+[BLI inspection-car touch lighting](https://broadway-limited.com/products/10177-conrail-type-track-inspection-car-unlettered-primer-gray-ho),
+and [ScaleTrains sound reefer with 9-volt battery](https://www.scaletrains.com/operator-ho-scale-cimc-53-reefer-container-cr-england.html).
+The BLI cars' track pickup and local-switch behavior are owner-verified details.
 
 ### Lifecycle record
 
