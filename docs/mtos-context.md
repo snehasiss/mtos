@@ -1017,8 +1017,9 @@ supervision, alternatives, consequences and migration order. The existing
 
 ### 2026-09-18: independent design review incorporated
 
-The review in `docs/mtos-review-design-2026-09-18.md` supports the six-service
-boundary but identified four contracts that could not remain implicit. ADR-009
+The [2026-09-18 design review](reviews/2026-09-18-1424-design-review.md)
+supports the six-service boundary but identified four contracts that could not
+remain implicit. ADR-009
 now specifies an Asset-owned multi-asset lease with monotonic fencing tokens,
 10-second renewal and 30-second expiry; expired leases require reconciliation
 before protected edits. DCC and MC reject stale Core sessions/tokens.

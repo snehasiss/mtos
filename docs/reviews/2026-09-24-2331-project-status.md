@@ -44,7 +44,7 @@ execution because Playwright is absent from the reviewing environment. Neither
 those tests nor the source review prove EX-CSB1, decoder, broker, ESP32,
 electrical, latency or recovery behavior on the deployed host.
 
-The [2026-09-18 code/documentation review](mtos-review-code_doc-2026-09-18.md)
+The [2026-09-18 code/documentation review](2026-09-18-1940-code-review.md)
 identified control and recovery defects. Several still match current source,
 including emergency admission/ordering, inability to persist stationary
 configuration consumed by Core, lost MC execution identity, and firmware
@@ -164,7 +164,7 @@ and supervised end-to-end trials.
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Owner as Owner/operator
+    actor Owner as Operator
     participant Dev as Coding and test work
     participant Host as Cubietruck MTOS
     participant DCC as EX-CSB1
@@ -206,7 +206,7 @@ sequenceDiagram
             Node-->>Host: Accessory evidence
             Host-->>Owner: Report progress and exceptions
         else Unknown or conflicting
-            Host-->>Owner: Reject or pause; request operator action
+            Host-->>Owner: Reject or pause and request operator action
         end
     end
 ```

@@ -21,7 +21,7 @@ from proposals still under discussion.
 
 ## Current architecture and operations
 
-- [Project status and phase completion review](reviews/mtos-review-project-status-2026-09-24-2322.md)
+- [Project status and phase completion review](reviews/2026-09-24-2331-project-status.md)
 - [Real-time control-service architecture](architecture/control-service-architecture.md)
 - [mtos_dcc module checkpoint](architecture/mtos-dcc-module.md)
 - [CV programming design and implementation plan](architecture/cv-programming-plan.md)
@@ -50,8 +50,8 @@ shared-database or HTTP-polling topology is superseded by ADR-009.
 
 ## Reviews
 
-- [Layout automation ADR review](reviews/layout-automation-review.md)
-- [Service architecture design review — 2026-09-18](mtos-review-design-2026-09-18.md)
+- [Layout automation ADR review](reviews/2026-09-18-1424-layout-automation.md)
+- [Service architecture design review — 2026-09-18](reviews/2026-09-18-1424-design-review.md)
 
 An ADR marked **Proposed** is not an implementation commitment. It exists so
 the model can be reviewed against real railroad operations before code and
