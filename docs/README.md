@@ -21,6 +21,7 @@ from proposals still under discussion.
 
 ## Current architecture and operations
 
+- [Project phases and completion plan](project-phases-and-completion-plan.md)
 - [Real-time control-service architecture](architecture/control-service-architecture.md)
 - [mtos_dcc module checkpoint](architecture/mtos-dcc-module.md)
 - [CV programming design and implementation plan](architecture/cv-programming-plan.md)
