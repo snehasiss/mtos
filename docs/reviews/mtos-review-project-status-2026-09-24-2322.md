@@ -25,7 +25,7 @@ occupancy truth and never issues raw DCC, MQTT, servo or signal commands. Core
 must validate proposed intents against deterministic route, occupancy,
 reservation and interlocking rules before any hardware adapter acts. Manual
 supervised operation must remain available if the LLM or Axon is offline. This
-preserves the safety and authority boundary in [ADR-009](decisions/ADR-009-service-decomposition-and-control-architecture.md).
+preserves the safety and authority boundary in [ADR-009](../decisions/ADR-009-service-decomposition-and-control-architecture.md).
 
 Asset management is not a prerequisite for every physical experiment, but its
 identity, configuration and lifecycle records must be correct before MTOS uses
@@ -44,7 +44,7 @@ execution because Playwright is absent from the reviewing environment. Neither
 those tests nor the source review prove EX-CSB1, decoder, broker, ESP32,
 electrical, latency or recovery behavior on the deployed host.
 
-The [2026-09-18 code/documentation review](reviews/mtos-review-code_doc-2026-09-18.md)
+The [2026-09-18 code/documentation review](mtos-review-code_doc-2026-09-18.md)
 identified control and recovery defects. Several still match current source,
 including emergency admission/ordering, inability to persist stationary
 configuration consumed by Core, lost MC execution identity, and firmware
@@ -68,7 +68,7 @@ evidence, not a substitute for a fresh acceptance run after changes.
    the station firmware and observed A/B mode and power reports. Choose one
    known-good test locomotive/decoder and record its starting address and CV
    evidence. Only one decoder may occupy PROG during service-mode programming.
-   See the [CV programming plan](architecture/cv-programming-plan.md).
+   See the [CV programming plan](../architecture/cv-programming-plan.md).
 3. **Prepare one accessory pilot node before scaling out.** Set up the local
    broker, unique node identity, credentials and topic ACLs. Assemble a
    protected/fused 12 V accessory branch, local regulated 5 V, ESP32 and the
@@ -77,7 +77,7 @@ evidence, not a substitute for a fresh acceptance run after changes.
    polarity, current, driver and flyback requirements first without a load;
    then commission one unloaded servo, one turnout and test LEDs in stages.
    Keep DCC track power electrically separate from accessory power. The
-   quantities in [ADR-007](decisions/ADR-007-stationary-assets-control-network-and-power.md)
+   quantities in [ADR-007](../decisions/ADR-007-stationary-assets-control-network-and-power.md)
    are provisional until the installed layout map and measurements are known.
 4. **Connect machines only after measurement.** For the water tower, measure
    trigger voltage/current/polarity, required contact time, full cycle time and
@@ -178,14 +178,14 @@ sequenceDiagram
         Dev->>Dev: Fix control, recovery and firmware blockers
         Dev->>Dev: Run Python, browser, frontend and firmware tests
         Dev->>Host: Deploy reviewed revision and verify backup/restore
-        Owner->>DCC: Wire isolated A MAIN and B PROG; provide power cutoff
-        Host->>DCC: Connect; query identity, roles and power
+        Owner->>DCC: Wire isolated A MAIN and B PROG with a physical power cutoff
+        Host->>DCC: Connect and query identity, roles and power
         DCC-->>Host: Verified physical reports
         Owner->>Decoder: Place one known decoder on PROG
         Host->>DCC: Read address and selected CVs
         DCC-->>Host: Correlated readback evidence
         Owner->>Host: Supervise reversible CV and address trials
-        Host->>DCC: Write, read back and conditionally update Asset
+        Host->>DCC: Write and read back then conditionally update Asset
         Owner->>Node: Assemble, map and measure one protected node
         Host->>Node: Fenced MQTT handshake and one output command
         Node-->>Host: Correlated accepted/terminal evidence
